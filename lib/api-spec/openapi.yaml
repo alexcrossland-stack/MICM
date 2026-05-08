@@ -3,20 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: MICM Manufacturing Maturity Assessment Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: companies
+    description: Company management
+  - name: users
+    description: User management
+  - name: assessments
+    description: Assessment cycle management
+  - name: scores
+    description: Assessment scoring
+  - name: actions
+    description: Improvement action tracking
+  - name: invitations
+    description: Invitation management
+  - name: reports
+    description: Reporting and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +38,661 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Companies ──────────────────────────────────────────────────────────────
+
+  /companies:
+    get:
+      operationId: listCompanies
+      tags: [companies]
+      summary: List all companies (Super Admin only)
+      responses:
+        "200":
+          description: List of companies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Company"
+    post:
+      operationId: createCompany
+      tags: [companies]
+      summary: Create a new company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompanyBody"
+      responses:
+        "201":
+          description: Created company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  /companies/{id}:
+    get:
+      operationId: getCompany
+      tags: [companies]
+      summary: Get a company by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateCompany
+      tags: [companies]
+      summary: Update a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCompanyBody"
+      responses:
+        "200":
+          description: Updated company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  /companies/{id}/dashboard:
+    get:
+      operationId: getCompanyDashboard
+      tags: [companies]
+      summary: Get company dashboard summary
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyDashboard"
+
+  /companies/me:
+    get:
+      operationId: getMyCompany
+      tags: [companies]
+      summary: Get the current user's company
+      responses:
+        "200":
+          description: Company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  # ─── Users ───────────────────────────────────────────────────────────────────
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get the current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/me/role:
+    get:
+      operationId: getMyRole
+      tags: [users]
+      summary: Get the current user's role and company
+      responses:
+        "200":
+          description: Role info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserRole"
+
+  /companies/{id}/users:
+    get:
+      operationId: listCompanyUsers
+      tags: [users]
+      summary: List users in a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ─── Invitations ─────────────────────────────────────────────────────────────
+
+  /invitations:
+    get:
+      operationId: listInvitations
+      tags: [invitations]
+      summary: List pending invitations
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invitation"
+    post:
+      operationId: createInvitation
+      tags: [invitations]
+      summary: Invite a user or company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvitationBody"
+      responses:
+        "201":
+          description: Created invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invitation"
+
+  /invitations/accept:
+    post:
+      operationId: acceptInvitation
+      tags: [invitations]
+      summary: Accept an invitation by token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInvitationBody"
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ─── Assessment Cycles ───────────────────────────────────────────────────────
+
+  /assessments:
+    get:
+      operationId: listAssessments
+      tags: [assessments]
+      summary: List assessment cycles
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of assessment cycles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssessmentCycle"
+    post:
+      operationId: createAssessment
+      tags: [assessments]
+      summary: Create a new assessment cycle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssessmentBody"
+      responses:
+        "201":
+          description: Created assessment cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentCycle"
+
+  /assessments/{id}:
+    get:
+      operationId: getAssessment
+      tags: [assessments]
+      summary: Get an assessment cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assessment cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentCycle"
+    patch:
+      operationId: updateAssessment
+      tags: [assessments]
+      summary: Update an assessment cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAssessmentBody"
+      responses:
+        "200":
+          description: Updated assessment cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentCycle"
+
+  /assessments/{id}/assign:
+    post:
+      operationId: assignAssessment
+      tags: [assessments]
+      summary: Assign users to an assessment cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignAssessmentBody"
+      responses:
+        "200":
+          description: Assigned users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentCycle"
+
+  /assessments/{id}/results:
+    get:
+      operationId: getAssessmentResults
+      tags: [assessments]
+      summary: Get aggregated results for an assessment cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assessment results with per-user and aggregate scores
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentResults"
+
+  # ─── Scores ──────────────────────────────────────────────────────────────────
+
+  /scores:
+    get:
+      operationId: listScores
+      tags: [scores]
+      summary: Get scores for an assessment cycle (optionally by user)
+      parameters:
+        - name: assessmentId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Score"
+    post:
+      operationId: submitScores
+      tags: [scores]
+      summary: Submit/upsert scores for an assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitScoresBody"
+      responses:
+        "200":
+          description: Saved scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Score"
+
+  /scores/radar:
+    get:
+      operationId: getRadarData
+      tags: [scores]
+      summary: Get radar/spider chart data for one or more users/cycles
+      parameters:
+        - name: assessmentId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: userIds
+          in: query
+          schema:
+            type: ["string", "null"]
+            description: Comma-separated user IDs for multi-user overlay
+        - name: compareAssessmentIds
+          in: query
+          schema:
+            type: ["string", "null"]
+            description: Comma-separated assessment IDs for multi-cycle overlay
+      responses:
+        "200":
+          description: Radar chart data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RadarData"
+
+  /scores/progress:
+    get:
+      operationId: getProgressOverTime
+      tags: [scores]
+      summary: Get domain score progress across assessment cycles
+      parameters:
+        - name: companyId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Progress data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgressData"
+
+  # ─── Domains / Questions ─────────────────────────────────────────────────────
+
+  /domains:
+    get:
+      operationId: listDomains
+      tags: [assessments]
+      summary: List all maturity domains with categories and criteria
+      responses:
+        "200":
+          description: All domains
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Domain"
+
+  # ─── Actions ─────────────────────────────────────────────────────────────────
+
+  /actions:
+    get:
+      operationId: listActions
+      tags: [actions]
+      summary: List improvement actions
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: assignedUserId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Actions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Action"
+    post:
+      operationId: createAction
+      tags: [actions]
+      summary: Create an improvement action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActionBody"
+      responses:
+        "201":
+          description: Created action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Action"
+
+  /actions/{id}:
+    get:
+      operationId: getAction
+      tags: [actions]
+      summary: Get an action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Action"
+    patch:
+      operationId: updateAction
+      tags: [actions]
+      summary: Update an action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateActionBody"
+      responses:
+        "200":
+          description: Updated action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Action"
+    delete:
+      operationId: deleteAction
+      tags: [actions]
+      summary: Delete an action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /actions/summary:
+    get:
+      operationId: getActionsSummary
+      tags: [actions]
+      summary: Get action counts by status for a company
+      parameters:
+        - name: companyId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Actions summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionsSummary"
+
+  # ─── Reports ─────────────────────────────────────────────────────────────────
+
+  /reports/company/{id}:
+    get:
+      operationId: getCompanyReport
+      tags: [reports]
+      summary: Get full company assessment report data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: assessmentId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Report data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyReport"
+
+  /reports/superadmin:
+    get:
+      operationId: getSuperAdminReport
+      tags: [reports]
+      summary: Cross-company aggregated report (Super Admin only)
+      responses:
+        "200":
+          description: Super admin report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuperAdminReport"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +703,718 @@ components:
       required:
         - status
 
+    # ─── Company ────────────────────────────────────────────────────────────────
+
+    Company:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sector:
+          type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - isActive
+        - createdAt
+        - updatedAt
+
+    CreateCompanyBody:
+      type: object
+      properties:
+        name:
+          type: string
+        sector:
+          type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+      required:
+        - name
+
+    UpdateCompanyBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        sector:
+          type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        isActive:
+          type: ["boolean", "null"]
+
+    CompanyDashboard:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        totalUsers:
+          type: integer
+        totalAssessments:
+          type: integer
+        completedAssessments:
+          type: integer
+        activeActions:
+          type: integer
+        completedActions:
+          type: integer
+        latestCycleScore:
+          type: ["number", "null"]
+        domainSummaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainSummary"
+      required:
+        - companyId
+        - totalUsers
+        - totalAssessments
+        - completedAssessments
+        - activeActions
+        - completedActions
+        - domainSummaries
+
+    DomainSummary:
+      type: object
+      properties:
+        domainId:
+          type: integer
+        domainName:
+          type: string
+        averageScore:
+          type: ["number", "null"]
+        band:
+          type: ["string", "null"]
+      required:
+        - domainId
+        - domainName
+
+    # ─── User ────────────────────────────────────────────────────────────────────
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkUserId:
+          type: string
+        email:
+          type: string
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [super_admin, company_admin, company_user]
+        companyId:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - clerkUserId
+        - email
+        - role
+        - isActive
+        - createdAt
+
+    UserRole:
+      type: object
+      properties:
+        userId:
+          type: integer
+        role:
+          type: string
+          enum: [super_admin, company_admin, company_user]
+        companyId:
+          type: ["integer", "null"]
+        companyName:
+          type: ["string", "null"]
+      required:
+        - userId
+        - role
+
+    UpdateUserBody:
+      type: object
+      properties:
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        role:
+          type: ["string", "null"]
+        isActive:
+          type: ["boolean", "null"]
+
+    # ─── Invitation ──────────────────────────────────────────────────────────────
+
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, company_admin, company_user]
+        companyId:
+          type: ["integer", "null"]
+        token:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, expired]
+        createdAt:
+          type: string
+        expiresAt:
+          type: string
+      required:
+        - id
+        - email
+        - role
+        - token
+        - status
+        - createdAt
+        - expiresAt
+
+    CreateInvitationBody:
+      type: object
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, company_admin, company_user]
+        companyId:
+          type: ["integer", "null"]
+      required:
+        - email
+        - role
+
+    AcceptInvitationBody:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token
+
+    # ─── Assessment Cycle ────────────────────────────────────────────────────────
+
+    AssessmentCycle:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, active, completed]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        assignedUserIds:
+          type: array
+          items:
+            type: integer
+        completedUserIds:
+          type: array
+          items:
+            type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - companyId
+        - name
+        - status
+        - assignedUserIds
+        - completedUserIds
+        - createdAt
+        - updatedAt
+
+    CreateAssessmentBody:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+      required:
+        - companyId
+        - name
+
+    UpdateAssessmentBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+
+    AssignAssessmentBody:
+      type: object
+      properties:
+        userIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - userIds
+
+    AssessmentResults:
+      type: object
+      properties:
+        assessmentId:
+          type: integer
+        assessmentName:
+          type: string
+        userScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserScoreSet"
+        aggregateScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainScore"
+      required:
+        - assessmentId
+        - assessmentName
+        - userScores
+        - aggregateScores
+
+    UserScoreSet:
+      type: object
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        domainScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainScore"
+        overallScore:
+          type: ["number", "null"]
+        completedAt:
+          type: ["string", "null"]
+      required:
+        - userId
+        - userName
+        - domainScores
+
+    DomainScore:
+      type: object
+      properties:
+        domainId:
+          type: integer
+        domainName:
+          type: string
+        score:
+          type: ["number", "null"]
+        band:
+          type: ["string", "null"]
+      required:
+        - domainId
+        - domainName
+
+    # ─── Score ───────────────────────────────────────────────────────────────────
+
+    Score:
+      type: object
+      properties:
+        id:
+          type: integer
+        assessmentId:
+          type: integer
+        userId:
+          type: integer
+        criterionId:
+          type: integer
+        score:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - assessmentId
+        - userId
+        - criterionId
+        - score
+        - createdAt
+        - updatedAt
+
+    SubmitScoresBody:
+      type: object
+      properties:
+        assessmentId:
+          type: integer
+        scores:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreInput"
+      required:
+        - assessmentId
+        - scores
+
+    ScoreInput:
+      type: object
+      properties:
+        criterionId:
+          type: integer
+        score:
+          type: integer
+        notes:
+          type: ["string", "null"]
+      required:
+        - criterionId
+        - score
+
+    RadarData:
+      type: object
+      properties:
+        domains:
+          type: array
+          items:
+            type: string
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/RadarSeries"
+      required:
+        - domains
+        - series
+
+    RadarSeries:
+      type: object
+      properties:
+        label:
+          type: string
+        scores:
+          type: array
+          items:
+            type: ["number", "null"]
+        color:
+          type: ["string", "null"]
+      required:
+        - label
+        - scores
+
+    ProgressData:
+      type: object
+      properties:
+        cycles:
+          type: array
+          items:
+            $ref: "#/components/schemas/CycleProgress"
+      required:
+        - cycles
+
+    CycleProgress:
+      type: object
+      properties:
+        assessmentId:
+          type: integer
+        assessmentName:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+        domainScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainScore"
+        overallScore:
+          type: ["number", "null"]
+      required:
+        - assessmentId
+        - assessmentName
+        - domainScores
+
+    # ─── Domain / Criteria ───────────────────────────────────────────────────────
+
+    Domain:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+      required:
+        - id
+        - name
+        - orderIndex
+        - categories
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        domainId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+        criteria:
+          type: array
+          items:
+            $ref: "#/components/schemas/Criterion"
+      required:
+        - id
+        - domainId
+        - name
+        - orderIndex
+        - criteria
+
+    Criterion:
+      type: object
+      properties:
+        id:
+          type: integer
+        categoryId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        baselineDescription:
+          type: ["string", "null"]
+        excellenceDescription:
+          type: ["string", "null"]
+        orderIndex:
+          type: integer
+      required:
+        - id
+        - categoryId
+        - name
+        - orderIndex
+
+    # ─── Action ──────────────────────────────────────────────────────────────────
+
+    Action:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        assessmentId:
+          type: ["integer", "null"]
+        domainId:
+          type: ["integer", "null"]
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [not_started, in_progress, completed, on_hold]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        assignedUserId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+        completedDate:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - companyId
+        - title
+        - status
+        - priority
+        - createdAt
+        - updatedAt
+
+    CreateActionBody:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        assessmentId:
+          type: ["integer", "null"]
+        domainId:
+          type: ["integer", "null"]
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        assignedUserId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+      required:
+        - companyId
+        - title
+        - priority
+
+    UpdateActionBody:
+      type: object
+      properties:
+        title:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+        priority:
+          type: ["string", "null"]
+        assignedUserId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+        completedDate:
+          type: ["string", "null"]
+
+    ActionsSummary:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        notStarted:
+          type: integer
+        inProgress:
+          type: integer
+        completed:
+          type: integer
+        onHold:
+          type: integer
+        total:
+          type: integer
+      required:
+        - companyId
+        - notStarted
+        - inProgress
+        - completed
+        - onHold
+        - total
+
+    # ─── Reports ─────────────────────────────────────────────────────────────────
+
+    CompanyReport:
+      type: object
+      properties:
+        company:
+          $ref: "#/components/schemas/Company"
+        assessmentCycles:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssessmentCycle"
+        latestResults:
+          $ref: "#/components/schemas/AssessmentResults"
+        progressData:
+          $ref: "#/components/schemas/ProgressData"
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Action"
+      required:
+        - company
+        - assessmentCycles
+        - progressData
+        - actions
+
+    SuperAdminReport:
+      type: object
+      properties:
+        totalCompanies:
+          type: integer
+        totalAssessments:
+          type: integer
+        totalUsers:
+          type: integer
+        companySummaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyReportSummary"
+      required:
+        - totalCompanies
+        - totalAssessments
+        - totalUsers
+        - companySummaries
+
+    CompanyReportSummary:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        companyName:
+          type: string
+        latestOverallScore:
+          type: ["number", "null"]
+        completedAssessments:
+          type: integer
+        activeActions:
+          type: integer
+        domainScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainScore"
+      required:
+        - companyId
+        - companyName
+        - completedAssessments
+        - activeActions
+        - domainScores

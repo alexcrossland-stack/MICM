@@ -1,0 +1,192 @@
+import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { companiesTable, usersTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable } from "@workspace/db";
+import { eq, and, count, sql, inArray } from "drizzle-orm";
+import {
+  ListCompaniesResponse,
+  GetCompanyResponse,
+  CreateCompanyBody,
+  UpdateCompanyBody,
+  GetCompanyParams,
+  UpdateCompanyParams,
+  GetCompanyDashboardParams,
+  GetCompanyDashboardResponse,
+  GetMyCompanyResponse,
+} from "@workspace/api-zod";
+import { requireAuth } from "./auth";
+
+const router: IRouter = Router();
+
+function formatCompany(c: any) {
+  return {
+    id: c.id,
+    name: c.name,
+    sector: c.sector,
+    size: c.size,
+    contactEmail: c.contactEmail,
+    isActive: c.isActive,
+    createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
+    updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
+  };
+}
+
+// GET /companies - Super Admin only
+router.get("/companies", requireAuth, async (req: any, res): Promise<void> => {
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!currentUser || currentUser.role !== "super_admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const companies = await db.select().from(companiesTable).orderBy(companiesTable.name);
+  res.json(ListCompaniesResponse.parse(companies.map(formatCompany)));
+});
+
+// POST /companies
+router.post("/companies", requireAuth, async (req: any, res): Promise<void> => {
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!currentUser || currentUser.role !== "super_admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const parsed = CreateCompanyBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [company] = await db.insert(companiesTable).values(parsed.data).returning();
+  res.status(201).json(GetCompanyResponse.parse(formatCompany(company)));
+});
+
+// GET /companies/me
+router.get("/companies/me", requireAuth, async (req: any, res): Promise<void> => {
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!user || !user.companyId) {
+    res.status(404).json({ error: "No company associated" });
+    return;
+  }
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, user.companyId));
+  if (!company) {
+    res.status(404).json({ error: "Company not found" });
+    return;
+  }
+  res.json(GetMyCompanyResponse.parse(formatCompany(company)));
+});
+
+// GET /companies/:id
+router.get("/companies/:id", requireAuth, async (req: any, res): Promise<void> => {
+  const params = GetCompanyParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!currentUser) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  // Super admin can see all, others can only see their own company
+  if (currentUser.role !== "super_admin" && currentUser.companyId !== params.data.id) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, params.data.id));
+  if (!company) { res.status(404).json({ error: "Company not found" }); return; }
+  res.json(GetCompanyResponse.parse(formatCompany(company)));
+});
+
+// PATCH /companies/:id
+router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void> => {
+  const params = UpdateCompanyParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!currentUser || (currentUser.role !== "super_admin" && !(currentUser.role === "company_admin" && currentUser.companyId === params.data.id))) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const parsed = UpdateCompanyBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const updates: any = {};
+  if (parsed.data.name != null) updates.name = parsed.data.name;
+  if (parsed.data.sector !== undefined) updates.sector = parsed.data.sector;
+  if (parsed.data.size !== undefined) updates.size = parsed.data.size;
+  if (parsed.data.contactEmail !== undefined) updates.contactEmail = parsed.data.contactEmail;
+  if (parsed.data.isActive != null) updates.isActive = parsed.data.isActive;
+
+  const [company] = await db.update(companiesTable).set(updates).where(eq(companiesTable.id, params.data.id)).returning();
+  if (!company) { res.status(404).json({ error: "Company not found" }); return; }
+  res.json(GetCompanyResponse.parse(formatCompany(company)));
+});
+
+// GET /companies/:id/dashboard
+router.get("/companies/:id/dashboard", requireAuth, async (req: any, res): Promise<void> => {
+  const params = GetCompanyDashboardParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!currentUser || (currentUser.role !== "super_admin" && currentUser.companyId !== params.data.id)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const companyId = params.data.id;
+
+  const [totalUsersResult] = await db.select({ count: count() }).from(usersTable).where(eq(usersTable.companyId, companyId));
+  const [totalAssessmentsResult] = await db.select({ count: count() }).from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, companyId));
+  const [completedAssessmentsResult] = await db.select({ count: count() }).from(assessmentCyclesTable).where(and(eq(assessmentCyclesTable.companyId, companyId), eq(assessmentCyclesTable.status, "completed")));
+  const [activeActionsResult] = await db.select({ count: count() }).from(actionsTable).where(and(eq(actionsTable.companyId, companyId), sql`${actionsTable.status} != 'completed'`));
+  const [completedActionsResult] = await db.select({ count: count() }).from(actionsTable).where(and(eq(actionsTable.companyId, companyId), eq(actionsTable.status, "completed")));
+
+  // Domain summaries from latest completed assessment
+  const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
+  const domainSummaries = allDomains.map(d => ({ domainId: d.id, domainName: d.name, averageScore: null, band: null }));
+
+  const latestCycle = await db.select().from(assessmentCyclesTable)
+    .where(and(eq(assessmentCyclesTable.companyId, companyId), eq(assessmentCyclesTable.status, "completed")))
+    .orderBy(sql`${assessmentCyclesTable.updatedAt} desc`)
+    .limit(1);
+
+  if (latestCycle.length > 0) {
+    const cycleId = latestCycle[0].id;
+    const allCriteria = await db.select({ id: criteriaTable.id, categoryId: criteriaTable.categoryId }).from(criteriaTable);
+    const allCategories = await db.select({ id: categoriesTable.id, domainId: categoriesTable.domainId }).from(categoriesTable);
+    const criterionToDomain: Record<number, number> = {};
+    for (const cat of allCategories) {
+      for (const crit of allCriteria) {
+        if (crit.categoryId === cat.id) criterionToDomain[crit.id] = cat.domainId;
+      }
+    }
+    const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, cycleId));
+    const domainScoreMap: Record<number, number[]> = {};
+    for (const s of scores) {
+      const domainId = criterionToDomain[s.criterionId];
+      if (domainId) {
+        if (!domainScoreMap[domainId]) domainScoreMap[domainId] = [];
+        domainScoreMap[domainId].push(s.score);
+      }
+    }
+    for (const ds of domainSummaries) {
+      const domainScores = domainScoreMap[ds.domainId];
+      if (domainScores && domainScores.length > 0) {
+        const avg = domainScores.reduce((a, b) => a + b, 0) / domainScores.length;
+        ds.averageScore = Math.round(avg * 100) / 100;
+        ds.band = avg <= 1 ? "Critical" : avg <= 2 ? "Weak" : avg <= 3 ? "Developing" : "Strong";
+      }
+    }
+  }
+
+  const allScores = domainSummaries.flatMap(d => d.averageScore != null ? [d.averageScore] : []);
+  const latestCycleScore = allScores.length > 0 ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length * 100) / 100 : null;
+
+  res.json(GetCompanyDashboardResponse.parse({
+    companyId,
+    totalUsers: totalUsersResult.count,
+    totalAssessments: totalAssessmentsResult.count,
+    completedAssessments: completedAssessmentsResult.count,
+    activeActions: activeActionsResult.count,
+    completedActions: completedActionsResult.count,
+    latestCycleScore,
+    domainSummaries,
+  }));
+});
+
+export default router;
