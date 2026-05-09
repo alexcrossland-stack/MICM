@@ -18,6 +18,7 @@ import CompaniesPage from "@/pages/Companies";
 import ReportsPage from "@/pages/Reports";
 import OnboardingPage from "@/pages/Onboarding";
 import AppShell from "@/components/AppShell";
+import DemoCredentials from "@/components/DemoCredentials";
 
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 
@@ -58,8 +59,9 @@ function TokenSync() {
 
 function SignInPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-0">
       <SignIn routing="path" path={`${BASE}/sign-in`} signUpUrl={`${BASE}/sign-up`} />
+      <DemoCredentials />
     </div>
   );
 }
