@@ -9,10 +9,12 @@ import scoresRouter from "./scores";
 import actionsRouter from "./actions";
 import domainsRouter from "./domains";
 import reportsRouter from "./reports";
+import demoRouter from "./demo";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(demoRouter);
 router.use(authRouter);
 router.use(companiesRouter);
 router.use(usersRouter);
