@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSignIn } from "@clerk/react";
+import { useClerk } from "@clerk/react";
 import { useLocation } from "wouter";
 import { ChevronDown, ChevronUp, ShieldAlert, LogIn, Loader2 } from "lucide-react";
 
@@ -57,10 +57,12 @@ function CopyButton({ value }: { value: string }) {
 }
 
 function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string }) {
-  // Clerk v6 Signals API: useSignIn() → { signIn: SignInFutureResource, errors, fetchStatus }
-  // signIn.ticket({ ticket }) authenticates with a sign-in token (bypasses email-code verification)
-  // signIn.finalize() converts the completed sign-in into an active browser session
-  const { signIn } = useSignIn();
+  // Use the classic Clerk flow via useClerk() — it gives us the fully-loaded Clerk
+  // instance with `client.signIn.create()` (returns a concrete SignInResource with
+  // .status and .createdSessionId on the resolved promise) and `setActive()`.
+  // This avoids the Signals-based `useSignIn().signIn` whose reactive `.status`
+  // can be stale inside a closure right after `await ticket()`.
+  const clerk = useClerk();
   const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,39 +83,35 @@ function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string 
       }
       const { token } = (await res.json()) as { token: string };
 
-      // Step 2 — authenticate with the sign-in token using Clerk's Signals API.
-      // This bypasses the email-code verification step that the dev Clerk instance requires.
-      const ticketResult = await signIn.ticket({ ticket: token });
-      if (ticketResult?.error) {
-        const msg =
-          (ticketResult.error as any).message ??
-          (ticketResult.error as any).longMessage ??
-          (ticketResult.error as any).code ??
-          "Ticket authentication failed";
-        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      // Step 2 — get the sign-in resource off the Clerk client and create a sign-in
+      // attempt with the ticket strategy. This bypasses the email-code first factor.
+      const signInResource = clerk.client?.signIn;
+      if (!signInResource) throw new Error("Clerk client not ready — please retry");
+
+      const result = await signInResource.create({
+        strategy: "ticket",
+        ticket: token,
+      });
+
+      if (result.status !== "complete" || !result.createdSessionId) {
+        throw new Error(
+          `Sign-in did not complete (status=${result.status ?? "unknown"})`,
+        );
       }
 
-      // Step 3 — finalize, but only if the sign-in is complete and not already activated.
-      // In some Clerk v6 paths `ticket()` already activates the session; calling
-      // `finalize()` on an already-active sign-in throws.
-      if (signIn.status === "complete") {
-        try {
-          const finalizeResult = await signIn.finalize();
-          if (finalizeResult?.error) {
-            // Treat finalize errors as non-fatal — the session may already be active.
-            // We rely on the page reload below to confirm.
-            console.warn("[demo sign-in] finalize warning:", finalizeResult.error);
-          }
-        } catch (finalizeErr) {
-          console.warn("[demo sign-in] finalize threw (likely already active):", finalizeErr);
-        }
-      }
+      // Step 3 — activate the new session on the Clerk instance. This sets the
+      // session cookie and updates all reactive Clerk hooks.
+      await clerk.setActive({ session: result.createdSessionId });
 
-      // Step 4 — full page reload to the dashboard. This guarantees Clerk re-reads the
-      // session from the cookie and all hooks rehydrate cleanly.
-      window.location.href = `${BASE}/`;
+      // Step 4 — navigate to the dashboard.
+      navigate("/");
     } catch (e: any) {
-      setError(e.message ?? "Something went wrong");
+      // Surface the most informative message Clerk gives us.
+      const errors = e?.errors as Array<{ message?: string; longMessage?: string }> | undefined;
+      const detail =
+        errors?.[0]?.longMessage ?? errors?.[0]?.message ?? e?.message ?? "Something went wrong";
+      console.error("[demo sign-in] failed:", e);
+      setError(detail);
     } finally {
       setLoading(false);
     }
