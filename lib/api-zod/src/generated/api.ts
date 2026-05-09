@@ -774,3 +774,21 @@ export const GetSuperAdminReportResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Cross-company maturity radar chart data (Super Admin only)
+ */
+export const GetCrossCompanyRadarQueryParams = zod.object({
+  companyIds: zod.coerce.string(),
+});
+
+export const GetCrossCompanyRadarResponse = zod.object({
+  domains: zod.array(zod.string()),
+  series: zod.array(
+    zod.object({
+      label: zod.string(),
+      scores: zod.array(zod.number().nullable()),
+      color: zod.string().nullish(),
+    }),
+  ),
+});

@@ -1,35 +1,65 @@
+import { useState, useEffect } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { useGetCompanyDashboard, useGetSuperAdminReport } from "@workspace/api-client-react";
+import {
+  useGetCompanyDashboard,
+  useGetSuperAdminReport,
+  useListAssessments,
+  useGetRadarData,
+  useListCompanies,
+  useGetCrossCompanyRadar,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip, PolarRadiusAxis } from "recharts";
 import { ClipboardList, Users, Zap, TrendingUp, Building2, CheckCircle2, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AssessmentMultiSelect,
+  CompanyMultiSelect,
+  OverlayRadarAndTable,
+  ScoreBandText,
+} from "@/components/RadarOverlay";
 
-const DOMAIN_COLORS = ["#6b8ef5", "#f5a97c", "#9cf5a4", "#f5e97c", "#c47cf5", "#7cf5e5"];
-
-function ScoreBand({ score }: { score: number | null }) {
-  if (score == null) return <span className="text-muted-foreground text-sm">No data</span>;
-  const band = score <= 1 ? "Critical" : score <= 2 ? "Weak" : score <= 3 ? "Developing" : "Strong";
-  const color = score <= 1 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-    : score <= 2 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-    : score <= 3 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-    : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
-  return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${color}`}>{band} ({score.toFixed(1)})</span>;
-}
+// ─── Company / non-admin dashboard ───────────────────────────────────────────
 
 function CompanyDashboard({ companyId }: { companyId: number }) {
-  const { data, isLoading } = useGetCompanyDashboard(companyId);
+  const { data, isLoading: dashLoading } = useGetCompanyDashboard(companyId);
+  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<number[]>([]);
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  const { data: assessments } = useListAssessments(undefined, {
+    query: { enabled: !!companyId } as any,
+  });
+
+  const sortedAssessments = assessments
+    ? [...assessments].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    : [];
+
+  // Auto-select the most recent completed assessment on first load
+  useEffect(() => {
+    if (!assessments) return;
+    const completed = [...assessments]
+      .filter((a) => a.status === "completed")
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    setSelectedAssessmentIds(completed.length > 0 ? [completed[0].id] : []);
+  }, [assessments]);
+
+  const [primaryId, ...compareIds] = selectedAssessmentIds;
+
+  const { data: radarData, isLoading: radarLoading } = useGetRadarData(
+    {
+      assessmentId: primaryId ?? 0,
+      compareAssessmentIds: compareIds.length > 0 ? compareIds.join(",") : undefined,
+    },
+    { query: { enabled: selectedAssessmentIds.length > 0 } as any },
+  );
+
+  if (dashLoading) {
+    return (
+      <div className="flex items-center justify-center h-40">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
   if (!data) return null;
-
-  const radarData = data.domainSummaries.map((d: any) => ({
-    domain: d.domainName,
-    score: d.averageScore ?? 0,
-    fullMark: 4,
-  }));
 
   const stats = [
     { label: "Team Members", value: data.totalUsers, icon: Users, color: "text-blue-500" },
@@ -45,9 +75,9 @@ function CompanyDashboard({ companyId }: { companyId: number }) {
         <p className="text-muted-foreground text-sm mt-1">Your manufacturing maturity overview</p>
       </div>
 
-      {/* Stats row */}
+      {/* KPI stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(s => (
+        {stats.map((s) => (
           <Card key={s.label} className="border-card-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -64,69 +94,57 @@ function CompanyDashboard({ companyId }: { companyId: number }) {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Radar chart */}
-        <Card className="border-card-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Maturity Radar</CardTitle>
-            {data.latestCycleScore != null && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Overall score:</span>
-                <ScoreBand score={data.latestCycleScore} />
-              </div>
-            )}
-          </CardHeader>
-          <CardContent>
-            {radarData.some((d: any) => d.score > 0) ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke="hsl(var(--border))" />
-                  <PolarAngleAxis dataKey="domain" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 4]} tick={{ fontSize: 10 }} />
-                  <Radar name="Score" dataKey="score" stroke="#6b8ef5" fill="#6b8ef5" fillOpacity={0.25} strokeWidth={2} />
-                  <Tooltip formatter={(v: any) => [Number(v).toFixed(1), "Score"]} />
-                </RadarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[260px] flex items-center justify-center text-muted-foreground text-sm">
-                Complete an assessment to see your radar chart
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Domain table */}
-        <Card className="border-card-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Domain Scores</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {data.domainSummaries.map((d: any, idx: number) => (
-                <div key={d.domainId} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DOMAIN_COLORS[idx % DOMAIN_COLORS.length] }} />
-                    <span className="text-sm font-medium">{d.domainName}</span>
-                  </div>
-                  <ScoreBand score={d.averageScore} />
-                </div>
-              ))}
+      {/* Radar with multi-assessment overlay */}
+      <Card className="border-card-border">
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Maturity Radar
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Select assessments to overlay and compare your scores over time
+              </p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            {sortedAssessments.length > 0 && (
+              <div className="w-full sm:w-80">
+                <AssessmentMultiSelect
+                  assessments={sortedAssessments}
+                  selectedIds={selectedAssessmentIds}
+                  onChange={setSelectedAssessmentIds}
+                />
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <OverlayRadarAndTable
+            radarData={radarData}
+            isLoading={radarLoading}
+            chartHeight={300}
+            emptyMessage="Complete an assessment to see your maturity radar chart."
+          />
+        </CardContent>
+      </Card>
 
       {/* Quick actions */}
       <Card className="border-card-border">
         <CardContent className="p-4 flex flex-wrap gap-3">
           <Link href="/assessments">
-            <Button variant="outline" size="sm" className="gap-2"><ClipboardList className="w-4 h-4" />View Assessments</Button>
+            <Button variant="outline" size="sm" className="gap-2">
+              <ClipboardList className="w-4 h-4" />View Assessments
+            </Button>
           </Link>
           <Link href="/actions">
-            <Button variant="outline" size="sm" className="gap-2"><Zap className="w-4 h-4" />Manage Actions</Button>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Zap className="w-4 h-4" />Manage Actions
+            </Button>
           </Link>
           <Link href="/reports">
-            <Button variant="outline" size="sm" className="gap-2"><BarChart3 className="w-4 h-4" />View Reports</Button>
+            <Button variant="outline" size="sm" className="gap-2">
+              <BarChart3 className="w-4 h-4" />View Reports
+            </Button>
           </Link>
         </CardContent>
       </Card>
@@ -134,10 +152,29 @@ function CompanyDashboard({ companyId }: { companyId: number }) {
   );
 }
 
+// ─── Super Admin dashboard ────────────────────────────────────────────────────
+
 function SuperAdminDashboard() {
   const { data, isLoading } = useGetSuperAdminReport();
+  const { data: companies } = useListCompanies();
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  const scoreByCompanyId: Record<number, number | null> = Object.fromEntries(
+    (data?.companySummaries ?? []).map((c) => [c.companyId, c.latestOverallScore ?? null]),
+  );
+
+  const { data: crossRadarData, isLoading: crossRadarLoading } = useGetCrossCompanyRadar(
+    { companyIds: selectedCompanyIds.join(",") },
+    { query: { enabled: selectedCompanyIds.length > 0 } as any },
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-40">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   const stats = [
     { label: "Companies", value: data?.totalCompanies ?? 0, icon: Building2, color: "text-blue-500" },
@@ -152,8 +189,9 @@ function SuperAdminDashboard() {
         <p className="text-muted-foreground text-sm mt-1">Platform-wide overview</p>
       </div>
 
+      {/* Platform KPI stats */}
       <div className="grid grid-cols-3 gap-4">
-        {stats.map(s => (
+        {stats.map((s) => (
           <Card key={s.label} className="border-card-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -170,6 +208,7 @@ function SuperAdminDashboard() {
         ))}
       </div>
 
+      {/* Company performance list */}
       {data?.companySummaries && data.companySummaries.length > 0 && (
         <Card className="border-card-border">
           <CardHeader className="pb-2">
@@ -178,13 +217,15 @@ function SuperAdminDashboard() {
           <CardContent className="p-0">
             <div className="divide-y divide-border">
               {data.companySummaries.map((co: any) => (
-                <Link key={co.companyId} href={`/companies`}>
+                <Link key={co.companyId} href="/companies">
                   <div className="flex items-center justify-between px-5 py-3 hover:bg-muted/50 cursor-pointer transition-colors">
                     <div>
                       <p className="text-sm font-medium">{co.companyName}</p>
-                      <p className="text-xs text-muted-foreground">{co.completedAssessments} completed assessments · {co.activeActions} active actions</p>
+                      <p className="text-xs text-muted-foreground">
+                        {co.completedAssessments} completed assessment{co.completedAssessments !== 1 ? "s" : ""} · {co.activeActions} active action{co.activeActions !== 1 ? "s" : ""}
+                      </p>
                     </div>
-                    <ScoreBand score={co.latestOverallScore} />
+                    <ScoreBandText score={co.latestOverallScore} />
                   </div>
                 </Link>
               ))}
@@ -193,22 +234,70 @@ function SuperAdminDashboard() {
         </Card>
       )}
 
-      <div className="flex gap-3">
+      {/* Cross-company radar comparison */}
+      <Card className="border-card-border">
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                Cross-Company Maturity Comparison
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Select up to 6 companies to overlay their latest completed assessment scores on the same radar
+              </p>
+            </div>
+            {(companies?.length ?? 0) > 0 && (
+              <div className="w-full sm:w-80">
+                <CompanyMultiSelect
+                  companies={companies ?? []}
+                  selectedIds={selectedCompanyIds}
+                  onChange={setSelectedCompanyIds}
+                  scoreByCompanyId={scoreByCompanyId}
+                />
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <OverlayRadarAndTable
+            radarData={crossRadarData}
+            isLoading={crossRadarLoading}
+            chartHeight={320}
+            emptyMessage="Select companies above to compare their latest maturity scores on the same radar chart."
+          />
+        </CardContent>
+      </Card>
+
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-3">
         <Link href="/companies">
-          <Button variant="outline" size="sm" className="gap-2"><Building2 className="w-4 h-4" />Manage Companies</Button>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Building2 className="w-4 h-4" />Manage Companies
+          </Button>
         </Link>
         <Link href="/reports">
-          <Button variant="outline" size="sm" className="gap-2"><BarChart3 className="w-4 h-4" />View Reports</Button>
+          <Button variant="outline" size="sm" className="gap-2">
+            <BarChart3 className="w-4 h-4" />View Reports
+          </Button>
         </Link>
       </div>
     </div>
   );
 }
 
+// ─── Root export ─────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const { isSuperAdmin, companyId, isLoaded } = useCurrentUser();
 
-  if (!isLoaded) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-40">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   if (isSuperAdmin) return <SuperAdminDashboard />;
   if (companyId) return <CompanyDashboard companyId={companyId} />;

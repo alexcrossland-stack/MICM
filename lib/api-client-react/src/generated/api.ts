@@ -33,6 +33,7 @@ import type {
   Domain,
   GetActionsSummaryParams,
   GetCompanyReportParams,
+  GetCrossCompanyRadarParams,
   GetProgressOverTimeParams,
   GetRadarDataParams,
   HealthStatus,
@@ -2964,6 +2965,109 @@ export function useGetSuperAdminReport<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetSuperAdminReportQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Cross-company maturity radar chart data (Super Admin only)
+ */
+export const getGetCrossCompanyRadarUrl = (
+  params: GetCrossCompanyRadarParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/cross-company-radar?${stringifiedParams}`
+    : `/api/reports/cross-company-radar`;
+};
+
+export const getCrossCompanyRadar = async (
+  params: GetCrossCompanyRadarParams,
+  options?: RequestInit,
+): Promise<RadarData> => {
+  return customFetch<RadarData>(getGetCrossCompanyRadarUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCrossCompanyRadarQueryKey = (
+  params?: GetCrossCompanyRadarParams,
+) => {
+  return [
+    `/api/reports/cross-company-radar`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetCrossCompanyRadarQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCrossCompanyRadar>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCrossCompanyRadarParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCrossCompanyRadar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCrossCompanyRadarQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCrossCompanyRadar>>
+  > = ({ signal }) =>
+    getCrossCompanyRadar(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCrossCompanyRadar>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCrossCompanyRadarQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCrossCompanyRadar>>
+>;
+export type GetCrossCompanyRadarQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Cross-company maturity radar chart data (Super Admin only)
+ */
+
+export function useGetCrossCompanyRadar<
+  TData = Awaited<ReturnType<typeof getCrossCompanyRadar>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetCrossCompanyRadarParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCrossCompanyRadar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCrossCompanyRadarQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -693,6 +693,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuperAdminReport"
 
+  /reports/cross-company-radar:
+    get:
+      operationId: getCrossCompanyRadar
+      tags: [reports]
+      summary: Cross-company maturity radar chart data (Super Admin only)
+      parameters:
+        - name: companyIds
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Comma-separated list of company IDs to compare
+      responses:
+        "200":
+          description: Radar data with one series per selected company (latest completed assessment)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RadarData"
+
 components:
   schemas:
     HealthStatus:

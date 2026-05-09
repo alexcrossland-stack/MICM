@@ -7,6 +7,7 @@ import {
   GetSuperAdminReportResponse,
   GetCompanyReportParams,
   GetCompanyReportQueryParams,
+  GetRadarDataResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
 
@@ -131,6 +132,84 @@ router.get("/reports/company/:id", requireAuth, async (req: any, res): Promise<v
     progressData: { cycles: progressCycles },
     actions: actionsFormatted,
   }));
+});
+
+// GET /reports/cross-company-radar  (Super Admin only)
+router.get("/reports/cross-company-radar", requireAuth, async (req: any, res): Promise<void> => {
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!currentUser || currentUser.role !== "super_admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const companyIdsParam = (req.query.companyIds ?? "") as string;
+  const companyIds = companyIdsParam.split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (companyIds.length === 0) {
+    res.status(400).json({ error: "companyIds is required" });
+    return;
+  }
+
+  const COLORS = ["#6b8ef5", "#f5a97c", "#9cf5a4", "#f5e97c", "#c47cf5", "#7cf5e5"];
+
+  const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
+  const allCategories = await db.select().from(categoriesTable);
+  const allCriteria = await db.select().from(criteriaTable);
+
+  const catToDomain: Record<number, number> = {};
+  for (const cat of allCategories) catToDomain[cat.id] = cat.domainId;
+  const critToCategory: Record<number, number> = {};
+  for (const crit of allCriteria) critToCategory[crit.id] = crit.categoryId;
+
+  const series: Array<{ label: string; scores: (number | null)[]; color: string }> = [];
+
+  for (const [idx, companyId] of companyIds.entries()) {
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
+    if (!company) continue;
+
+    // Find the latest completed cycle for this company
+    const completedCycles = await db
+      .select()
+      .from(assessmentCyclesTable)
+      .where(and(eq(assessmentCyclesTable.companyId, companyId), eq(assessmentCyclesTable.status, "completed")));
+
+    if (completedCycles.length === 0) {
+      series.push({
+        label: company.name,
+        scores: allDomains.map(() => null),
+        color: COLORS[idx % COLORS.length],
+      });
+      continue;
+    }
+
+    const latestCycle = completedCycles.sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )[0];
+
+    const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, latestCycle.id));
+
+    const domainMap: Record<number, number[]> = {};
+    for (const s of scores) {
+      const catId = critToCategory[s.criterionId];
+      const dId = catId != null ? catToDomain[catId] : null;
+      if (dId) {
+        if (!domainMap[dId]) domainMap[dId] = [];
+        domainMap[dId].push(s.score);
+      }
+    }
+
+    series.push({
+      label: company.name,
+      scores: allDomains.map((d) => {
+        const arr = domainMap[d.id];
+        return arr && arr.length > 0
+          ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100
+          : null;
+      }),
+      color: COLORS[idx % COLORS.length],
+    });
+  }
+
+  res.json(GetRadarDataResponse.parse({ domains: allDomains.map((d) => d.name), series }));
 });
 
 // GET /reports/superadmin

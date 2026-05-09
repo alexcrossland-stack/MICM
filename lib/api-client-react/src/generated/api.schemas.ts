@@ -512,3 +512,10 @@ export type GetCompanyReportParams = {
    */
   assessmentId?: number | null;
 };
+
+export type GetCrossCompanyRadarParams = {
+  /**
+   * Comma-separated list of company IDs to compare
+   */
+  companyIds: string;
+};
