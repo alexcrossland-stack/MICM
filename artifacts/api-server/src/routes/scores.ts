@@ -132,12 +132,16 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
   const requestedUserIds = queryParams.data.userIds ? queryParams.data.userIds.split(",").map(Number).filter(Boolean) : null;
   const compareAssessmentIds = queryParams.data.compareAssessmentIds ? queryParams.data.compareAssessmentIds.split(",").map(Number).filter(Boolean) : null;
 
+  // Helper: check a cycle is accessible to this user (super_admin bypasses)
+  const canAccessCycle = (cycle: { companyId: number }) =>
+    currentUser.role === "super_admin" || currentUser.companyId === cycle.companyId;
+
   if (compareAssessmentIds && compareAssessmentIds.length > 0) {
-    // Multi-cycle comparison
+    // Multi-cycle comparison — overlay each requested cycle as its own series
     const allCycleIds = [assessmentId, ...compareAssessmentIds];
     for (const [idx, cycleId] of allCycleIds.entries()) {
       const [cycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, cycleId));
-      if (!cycle) continue;
+      if (!cycle || !canAccessCycle(cycle)) continue;
       const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, cycleId));
       const domainMap: Record<number, number[]> = {};
       for (const s of scores) {
@@ -154,7 +158,12 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
       });
     }
   } else if (requestedUserIds && requestedUserIds.length > 0) {
-    // Multi-user overlay
+    // Multi-user overlay within a single cycle
+    const [primaryCycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, assessmentId));
+    if (!primaryCycle || !canAccessCycle(primaryCycle)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
     const usersToShow = await db.select().from(usersTable).where(inArray(usersTable.id, requestedUserIds));
     for (const [idx, u] of usersToShow.entries()) {
       const scores = await db.select().from(scoresTable).where(and(eq(scoresTable.assessmentId, assessmentId), eq(scoresTable.userId, u.id)));
@@ -174,6 +183,11 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
     }
   } else {
     // Single aggregate view
+    const [primaryCycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, assessmentId));
+    if (!primaryCycle || !canAccessCycle(primaryCycle)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
     const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, assessmentId));
     const domainMap: Record<number, number[]> = {};
     for (const s of scores) {
@@ -181,7 +195,7 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
       if (dId) { if (!domainMap[dId]) domainMap[dId] = []; domainMap[dId].push(s.score); }
     }
     series.push({
-      label: "Team Average",
+      label: primaryCycle.name,
       scores: allDomains.map(d => {
         const arr = domainMap[d.id];
         return arr && arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 100) / 100 : null;
