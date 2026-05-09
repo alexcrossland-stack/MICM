@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable, actionsTable } from "@workspace/db";
+import { usersTable, actionsTable, type Action } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import {
   ListActionsResponse,
@@ -67,7 +67,7 @@ router.get("/actions", requireAuth, async (req: any, res): Promise<void> => {
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
   if (!currentUser) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  let actions;
+  let actions: Action[];
   if (currentUser.role === "super_admin" && queryParams.data.companyId) {
     actions = await db.select().from(actionsTable).where(eq(actionsTable.companyId, queryParams.data.companyId));
   } else if (currentUser.companyId) {

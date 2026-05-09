@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useSignIn } from "@clerk/react";
+import { useLocation } from "wouter";
 import { ChevronDown, ChevronUp, ShieldAlert, LogIn, Loader2 } from "lucide-react";
 
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
@@ -55,6 +57,11 @@ function CopyButton({ value }: { value: string }) {
 }
 
 function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string }) {
+  // Clerk v6 Signals API: useSignIn() → { signIn: SignInFutureResource, errors, fetchStatus }
+  // signIn.ticket({ ticket }) authenticates with a sign-in token (bypasses email-code verification)
+  // signIn.finalize() converts the completed sign-in into an active browser session
+  const { signIn } = useSignIn();
+  const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +69,7 @@ function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string 
     setLoading(true);
     setError(null);
     try {
+      // Step 1 — get a short-lived Clerk sign-in token from the dev-only backend endpoint
       const res = await fetch(`${BASE}/api/demo/sign-in-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -69,14 +77,30 @@ function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string 
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).error ?? "Failed to create sign-in token");
+        throw new Error((err as any).error ?? `Server error ${res.status}`);
       }
-      const { token } = await res.json() as { token: string };
-      // Navigate to /sign-in with the Clerk ticket — Clerk's SDK
-      // detects __clerk_ticket in the URL and completes sign-in automatically.
-      window.location.href = `${window.location.origin}${BASE}/sign-in?__clerk_ticket=${token}`;
+      const { token } = (await res.json()) as { token: string };
+
+      // Step 2 — authenticate with the sign-in token using Clerk's Signals API.
+      // This bypasses the email-code verification step that the dev Clerk instance requires,
+      // without changing any global instance settings.
+      const { error: ticketError } = await signIn.ticket({ ticket: token });
+      if (ticketError) {
+        throw new Error((ticketError as any).message ?? "Ticket authentication failed");
+      }
+
+      // Step 3 — finalize converts the completed sign-in into an active session and
+      // triggers reactive observers (useUser, useAuth) to update automatically.
+      const { error: finalizeError } = await signIn.finalize();
+      if (finalizeError) {
+        throw new Error((finalizeError as any).message ?? "Failed to activate session");
+      }
+
+      // Step 4 — navigate to the dashboard (stays on the same domain; no full page reload)
+      navigate("/");
     } catch (e: any) {
       setError(e.message ?? "Something went wrong");
+    } finally {
       setLoading(false);
     }
   };
@@ -95,7 +119,9 @@ function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string 
         )}
         {loading ? "Signing in…" : "Sign in instantly"}
       </button>
-      {error && <p className="text-xs text-red-600 mt-1 text-center">{error}</p>}
+      {error && (
+        <p className="text-xs text-red-600 mt-1 text-center leading-snug">{error}</p>
+      )}
     </div>
   );
 }
@@ -123,21 +149,25 @@ export default function DemoCredentials() {
               key={account.email}
               className={`rounded-lg border p-3 text-xs ${account.color}`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className={`font-semibold px-1.5 py-0.5 rounded text-xs ${account.badge}`}>
+              <div className="flex items-center justify-between mb-2 gap-2">
+                <span
+                  className={`font-semibold px-1.5 py-0.5 rounded text-xs shrink-0 ${account.badge}`}
+                >
                   {account.label}
                 </span>
-                <span className="text-muted-foreground text-xs">{account.description}</span>
+                <span className="text-muted-foreground text-xs text-right leading-snug">
+                  {account.description}
+                </span>
               </div>
               <div className="space-y-0.5 mb-2">
                 <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground w-14">Email</span>
-                  <code className="font-mono">{account.email}</code>
+                  <span className="text-muted-foreground w-14 shrink-0">Email</span>
+                  <code className="font-mono text-xs">{account.email}</code>
                   <CopyButton value={account.email} />
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground w-14">Password</span>
-                  <code className="font-mono">{account.password}</code>
+                  <span className="text-muted-foreground w-14 shrink-0">Password</span>
+                  <code className="font-mono text-xs">{account.password}</code>
                   <CopyButton value={account.password} />
                 </div>
               </div>

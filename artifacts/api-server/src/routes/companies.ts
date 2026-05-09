@@ -138,7 +138,7 @@ router.get("/companies/:id/dashboard", requireAuth, async (req: any, res): Promi
 
   // Domain summaries from latest completed assessment
   const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
-  const domainSummaries = allDomains.map(d => ({ domainId: d.id, domainName: d.name, averageScore: null, band: null }));
+  const domainSummaries: { domainId: number; domainName: string; averageScore: number | null; band: string | null }[] = allDomains.map(d => ({ domainId: d.id, domainName: d.name, averageScore: null, band: null }));
 
   const latestCycle = await db.select().from(assessmentCyclesTable)
     .where(and(eq(assessmentCyclesTable.companyId, companyId), eq(assessmentCyclesTable.status, "completed")))

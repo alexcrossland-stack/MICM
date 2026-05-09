@@ -27,8 +27,11 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
 // In production, VITE_CLERK_PROXY_URL is set automatically; in dev it's empty (Clerk loads from CDN)
 const clerkProxyUrl = (import.meta.env.VITE_CLERK_PROXY_URL as string) || undefined;
 
-// Configure the API client base URL once (relative to proxy base)
-setBaseUrl(`${BASE}/api`);
+// Configure the API client base URL.
+// Generated hooks already have /api hardcoded in their paths (from orval baseUrl config),
+// so we only pass the sub-path prefix if the app is mounted at a non-root path.
+// Passing /api here would double-prefix every request → /api/api/…
+setBaseUrl(BASE || null);
 
 const queryClient = new QueryClient({
   defaultOptions: {
