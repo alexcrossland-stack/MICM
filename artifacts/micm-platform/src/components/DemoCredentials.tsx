@@ -82,22 +82,36 @@ function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string 
       const { token } = (await res.json()) as { token: string };
 
       // Step 2 — authenticate with the sign-in token using Clerk's Signals API.
-      // This bypasses the email-code verification step that the dev Clerk instance requires,
-      // without changing any global instance settings.
-      const { error: ticketError } = await signIn.ticket({ ticket: token });
-      if (ticketError) {
-        throw new Error((ticketError as any).message ?? "Ticket authentication failed");
+      // This bypasses the email-code verification step that the dev Clerk instance requires.
+      const ticketResult = await signIn.ticket({ ticket: token });
+      if (ticketResult?.error) {
+        const msg =
+          (ticketResult.error as any).message ??
+          (ticketResult.error as any).longMessage ??
+          (ticketResult.error as any).code ??
+          "Ticket authentication failed";
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
 
-      // Step 3 — finalize converts the completed sign-in into an active session and
-      // triggers reactive observers (useUser, useAuth) to update automatically.
-      const { error: finalizeError } = await signIn.finalize();
-      if (finalizeError) {
-        throw new Error((finalizeError as any).message ?? "Failed to activate session");
+      // Step 3 — finalize, but only if the sign-in is complete and not already activated.
+      // In some Clerk v6 paths `ticket()` already activates the session; calling
+      // `finalize()` on an already-active sign-in throws.
+      if (signIn.status === "complete") {
+        try {
+          const finalizeResult = await signIn.finalize();
+          if (finalizeResult?.error) {
+            // Treat finalize errors as non-fatal — the session may already be active.
+            // We rely on the page reload below to confirm.
+            console.warn("[demo sign-in] finalize warning:", finalizeResult.error);
+          }
+        } catch (finalizeErr) {
+          console.warn("[demo sign-in] finalize threw (likely already active):", finalizeErr);
+        }
       }
 
-      // Step 4 — navigate to the dashboard (stays on the same domain; no full page reload)
-      navigate("/");
+      // Step 4 — full page reload to the dashboard. This guarantees Clerk re-reads the
+      // session from the cookie and all hooks rehydrate cleanly.
+      window.location.href = `${BASE}/`;
     } catch (e: any) {
       setError(e.message ?? "Something went wrong");
     } finally {
