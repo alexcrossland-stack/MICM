@@ -9,13 +9,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, ChevronRight, CheckCircle2, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScoreGuide, SelectedScoreHint } from "@/components/ScoreGuide";
 
 const SCORE_LABELS = [
-  { value: 0, label: "0 – Not in place", color: "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400" },
-  { value: 1, label: "1 – Initial", color: "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400" },
-  { value: 2, label: "2 – Developing", color: "border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400" },
-  { value: 3, label: "3 – Defined", color: "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400" },
-  { value: 4, label: "4 – Optimised", color: "border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400" },
+  { value: 0, color: "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400" },
+  { value: 1, color: "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400" },
+  { value: 2, color: "border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400" },
+  { value: 3, color: "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400" },
+  { value: 4, color: "border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400" },
 ];
 
 type ScoreMap = Record<number, { score: number; notes: string }>;
@@ -162,6 +163,9 @@ export default function TakeAssessmentPage() {
           {domain.description && <p className="text-sm text-muted-foreground mt-0.5">{domain.description}</p>}
         </div>
 
+        {/* Scoring guide — shown once per domain above the criteria */}
+        <ScoreGuide variant="panel" />
+
         {domain.categories.map((cat: any) => (
           <Card key={cat.id} className="border-card-border">
             <CardHeader className="pb-2">
@@ -193,21 +197,25 @@ export default function TakeAssessmentPage() {
                       </div>
                     )}
                     {/* Score buttons */}
-                    <div className="flex gap-1.5 flex-wrap">
-                      {SCORE_LABELS.map(sl => (
-                        <button
-                          key={sl.value}
-                          onClick={() => setScore(crit.id, sl.value)}
-                          className={cn(
-                            "px-2.5 py-1 rounded-md text-xs font-medium border-2 transition-all",
-                            current?.score === sl.value
-                              ? `${sl.color} border-current shadow-sm scale-105`
-                              : "border-border bg-card text-muted-foreground hover:border-current hover:bg-muted"
-                          )}
-                        >
-                          {sl.value}
-                        </button>
-                      ))}
+                    <div className="space-y-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {SCORE_LABELS.map(sl => (
+                          <button
+                            key={sl.value}
+                            onClick={() => setScore(crit.id, sl.value)}
+                            className={cn(
+                              "px-3 py-1.5 rounded-md text-sm font-bold border-2 transition-all",
+                              current?.score === sl.value
+                                ? `${sl.color} border-current shadow-sm scale-105`
+                                : "border-border bg-card text-muted-foreground hover:border-current hover:bg-muted"
+                            )}
+                          >
+                            {sl.value}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Inline hint: shows the selected score's exact definition */}
+                      <SelectedScoreHint score={current?.score} />
                     </div>
                     <Textarea
                       placeholder="Notes (optional)..."

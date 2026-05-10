@@ -26,6 +26,7 @@ import {
   OverlayRadarAndTable,
   CHART_COLORS,
 } from "@/components/RadarOverlay";
+import { ScoreGuide } from "@/components/ScoreGuide";
 
 export default function ReportsPage() {
   const { companyId, isSuperAdmin } = useCurrentUser();
@@ -146,6 +147,7 @@ export default function ReportsPage() {
               chartHeight={320}
               emptyMessage="Select companies above to compare their latest maturity scores on the radar chart."
             />
+            <ScoreGuide variant="compact" />
           </CardContent>
         </Card>
       )}
@@ -252,6 +254,7 @@ export default function ReportsPage() {
                   chartHeight={310}
                   emptyMessage="Select at least one assessment above to view the radar chart."
                 />
+                <ScoreGuide variant="compact" />
               </CardContent>
             </Card>
           )}

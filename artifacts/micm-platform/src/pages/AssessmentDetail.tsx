@@ -20,6 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Users, CheckCircle2, ChevronLeft, Play } from "lucide-react";
+import { ScoreGuide } from "@/components/ScoreGuide";
 
 const RADAR_COLORS = ["#6b8ef5", "#f5a97c", "#9cf5a4", "#f5e97c", "#c47cf5", "#7cf5e5"];
 
@@ -199,6 +200,9 @@ export default function AssessmentDetailPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="px-4 pb-4">
+              <ScoreGuide variant="compact" />
             </div>
           </CardContent>
         </Card>

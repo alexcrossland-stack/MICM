@@ -18,6 +18,7 @@ import {
   OverlayRadarAndTable,
   ScoreBandText,
 } from "@/components/RadarOverlay";
+import { ScoreGuide } from "@/components/ScoreGuide";
 
 // ─── Company / non-admin dashboard ───────────────────────────────────────────
 
@@ -125,6 +126,7 @@ function CompanyDashboard({ companyId }: { companyId: number }) {
             chartHeight={300}
             emptyMessage="Complete an assessment to see your maturity radar chart."
           />
+          <ScoreGuide variant="compact" />
         </CardContent>
       </Card>
 
@@ -266,6 +268,7 @@ function SuperAdminDashboard() {
             chartHeight={320}
             emptyMessage="Select companies above to compare their latest maturity scores on the same radar chart."
           />
+          <ScoreGuide variant="compact" />
         </CardContent>
       </Card>
 
