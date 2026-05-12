@@ -698,8 +698,15 @@ paths:
           required: false
           schema:
             type: string
-            enum: [csv]
+            enum: [csv, pdf]
             default: csv
+        - name: template
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [board_ready, operational_detail, executive_summary]
+            default: board_ready
       responses:
         "200":
           description: Exported company report
@@ -712,6 +719,10 @@ paths:
             text/csv:
               schema:
                 type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
 
   /reports/superadmin:
     get:

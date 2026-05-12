@@ -15,6 +15,11 @@ import {
   generateCompanyReportExport,
   type CompanyReportExportFormat,
 } from "../lib/reportExports";
+import {
+  composeCompanyReport,
+  type ReportAudience,
+  type ReportTemplate,
+} from "../lib/reportComposition";
 
 const router: IRouter = Router();
 
@@ -57,12 +62,13 @@ async function getDomainScoresForCycle(cycleId: number) {
   });
 }
 
-async function canAccessCompanyReport(req: any, companyId: number) {
+async function getCompanyReportAccess(req: any, companyId: number) {
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
   if (!currentUser || (currentUser.role !== "super_admin" && currentUser.role !== "company_admin")) {
-    return false;
+    return null;
   }
-  return currentUser.role === "super_admin" || currentUser.companyId === companyId;
+  if (currentUser.role !== "super_admin" && currentUser.companyId !== companyId) return null;
+  return currentUser;
 }
 
 async function buildCompanyReport(companyId: number) {
@@ -136,7 +142,7 @@ router.get("/reports/company/:id", requireAuth, async (req: any, res): Promise<v
   const params = GetCompanyReportParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  if (!(await canAccessCompanyReport(req, params.data.id))) {
+  if (!(await getCompanyReportAccess(req, params.data.id))) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -155,10 +161,12 @@ router.get("/reports/company/:id/export", requireAuth, async (req: any, res): Pr
   const query = GetCompanyReportExportQueryParams.safeParse({
     ...req.query,
     format: req.query.format ?? "csv",
+    template: req.query.template ?? "board_ready",
   });
   if (!query.success) { res.status(400).json({ error: query.error.message }); return; }
 
-  if (!(await canAccessCompanyReport(req, params.data.id))) {
+  const currentUser = await getCompanyReportAccess(req, params.data.id);
+  if (!currentUser) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -166,8 +174,10 @@ router.get("/reports/company/:id/export", requireAuth, async (req: any, res): Pr
   const report = await buildCompanyReport(params.data.id);
   if (!report) { res.status(404).json({ error: "Company not found" }); return; }
 
+  const audience: ReportAudience = currentUser.role === "super_admin" ? "super_admin" : "company_admin";
+  const composition = composeCompanyReport(report, query.data.template as ReportTemplate, audience);
   const exportResult = generateCompanyReportExport(
-    report,
+    composition,
     query.data.format as CompanyReportExportFormat,
   );
   res.setHeader("Content-Type", exportResult.contentType);
