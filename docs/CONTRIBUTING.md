@@ -136,6 +136,15 @@ When making API changes, verify:
 - [ ] The response shape matches the schema (no extra or missing fields)
 - [ ] `lib/api-zod/src/index.ts` contains only `export * from "./generated/api";`
 
+When changing report exports, also verify:
+
+- [ ] Export query parameters are defined in OpenAPI before route changes
+- [ ] Company Admins can export only their own company reports
+- [ ] Super Admins can export cross-company reports where the route allows it
+- [ ] Company Users cannot export reports unless the product explicitly grants that workflow
+- [ ] CSV/PDF renderers use the shared report composition layer instead of duplicating business logic
+- [ ] Unsupported templates and export formats return a validation error
+
 ---
 
 ## Database Change Checklist

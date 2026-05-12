@@ -593,6 +593,7 @@ export type GetCompanyReportParams = {
 
 export type GetCompanyReportExportParams = {
   format?: GetCompanyReportExportFormat;
+  template?: GetCompanyReportExportTemplate;
 };
 
 export type GetCompanyReportExportFormat =
@@ -600,6 +601,16 @@ export type GetCompanyReportExportFormat =
 
 export const GetCompanyReportExportFormat = {
   csv: "csv",
+  pdf: "pdf",
+} as const;
+
+export type GetCompanyReportExportTemplate =
+  (typeof GetCompanyReportExportTemplate)[keyof typeof GetCompanyReportExportTemplate];
+
+export const GetCompanyReportExportTemplate = {
+  board_ready: "board_ready",
+  operational_detail: "operational_detail",
+  executive_summary: "executive_summary",
 } as const;
 
 export type GetCrossCompanyRadarParams = {

@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../app";
+import { composeCompanyReport } from "../lib/reportComposition";
 
 type Row = Record<string, any>;
 type TableRef = { __name: string; [key: string]: any };
@@ -545,13 +546,37 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     const exportResponse = await request(app).get("/api/reports/company/1/export").query({ format: "csv" });
     expect(exportResponse.status).toBe(200);
     expect(exportResponse.headers["content-type"]).toContain("text/csv");
-    expect(exportResponse.headers["content-disposition"]).toContain("acme-precision-maturity-report.csv");
-    expect(exportResponse.text).toContain("company_id,company_name,assessment_id,assessment_name");
-    expect(exportResponse.text).toContain("1,Acme Precision,103,A Complete");
-    expect(exportResponse.text).toContain("1,Acme Precision,103,A Complete,2026-01-01T00:00:00.000Z,1,Strategy,3,Developing,3.5");
+    expect(exportResponse.headers["content-disposition"]).toContain("acme-precision-board-ready-report.csv");
+    expect(exportResponse.text).toContain("template,section,company_id,company_name,item_id,item_name,item_date");
+    expect(exportResponse.text).toContain("board_ready,domain_findings,1,Acme Precision");
+    expect(exportResponse.text).toContain("1,Strategy,3,Developing,3.5");
 
     expect((await request(app).get("/api/reports/company/2")).status).toBe(403);
     expect((await request(app).get("/api/reports/company/2/export").query({ format: "csv" })).status).toBe(403);
+
+    signInAs("clerk-user-a");
+    expect((await request(app).get("/api/reports/company/1/export").query({ format: "csv" })).status).toBe(403);
+  });
+
+  it("supports report template selection and rejects unsupported export options", async () => {
+    signInAs("clerk-admin-a");
+
+    const operationalResponse = await request(app)
+      .get("/api/reports/company/1/export")
+      .query({ format: "csv", template: "operational_detail" });
+    expect(operationalResponse.status).toBe(200);
+    expect(operationalResponse.headers["content-disposition"]).toContain("operational-detail-report.csv");
+    expect(operationalResponse.text).toContain("operational_detail,action_roadmap");
+
+    const executiveResponse = await request(app)
+      .get("/api/reports/company/1/export")
+      .query({ format: "csv", template: "executive_summary" });
+    expect(executiveResponse.status).toBe(200);
+    expect(executiveResponse.headers["content-disposition"]).toContain("executive-summary-only.csv");
+    expect(executiveResponse.text).not.toContain("action_roadmap");
+
+    expect((await request(app).get("/api/reports/company/1/export").query({ format: "xlsx" })).status).toBe(400);
+    expect((await request(app).get("/api/reports/company/1/export").query({ template: "weekly" })).status).toBe(400);
   });
 
   it("smoke-tests Super Admin reporting and cross-company radar endpoints", async () => {
@@ -565,9 +590,40 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(radarResponse.status).toBe(200);
     expect(radarResponse.body.series.map((series: any) => series.label)).toEqual(["Acme Precision", "Beta Fabrication"]);
 
+    const pdfExportResponse = await request(app)
+      .get("/api/reports/company/2/export")
+      .query({ format: "pdf", template: "board_ready" });
+    expect(pdfExportResponse.status).toBe(200);
+    expect(pdfExportResponse.headers["content-type"]).toContain("application/pdf");
+    expect(pdfExportResponse.headers["content-disposition"]).toContain("beta-fabrication-board-ready-report.pdf");
+
     signInAs("clerk-admin-a");
     expect((await request(app).get("/api/reports/superadmin")).status).toBe(403);
     expect((await request(app).get("/api/reports/cross-company-radar").query({ companyIds: "1,2" })).status).toBe(403);
+  });
+
+  it("composes structured report payloads independently from export format", async () => {
+    signInAs("clerk-super");
+
+    const reportResponse = await request(app).get("/api/reports/company/1");
+    expect(reportResponse.status).toBe(200);
+
+    const composition = composeCompanyReport(reportResponse.body, "board_ready", "super_admin");
+    expect(composition.templateLabel).toBe("Board-ready report");
+    expect(composition.coverSummary.companyName).toBe("Acme Precision");
+    expect(composition.executiveSummary.bullets.length).toBeGreaterThan(0);
+    expect(composition.maturityOverview.overallScore).toBe(3.5);
+    expect(composition.domainFindings.map((finding) => finding.domainName)).toEqual(["Strategy", "Operations"]);
+    expect(composition.actionRoadmap.byStatus.not_started).toBe(1);
+    expect(composition.benchmarking.available).toBe(true);
+    expect(composition.includedSections).toEqual([
+      "cover_summary",
+      "executive_summary",
+      "maturity_overview",
+      "domain_findings",
+      "action_roadmap",
+      "benchmarking",
+    ]);
   });
 
   it("smoke-tests analytics-adjacent progress, targets, and action summary endpoints without leaking other companies", async () => {

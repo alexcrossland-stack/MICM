@@ -2929,8 +2929,8 @@ export const getCompanyReportExport = async (
   id: number,
   params?: GetCompanyReportExportParams,
   options?: RequestInit,
-): Promise<string> => {
-  return customFetch<string>(getGetCompanyReportExportUrl(id, params), {
+): Promise<string | Blob> => {
+  return customFetch<string | Blob>(getGetCompanyReportExportUrl(id, params), {
     ...options,
     method: "GET",
   });

@@ -757,9 +757,15 @@ export const GetCompanyReportExportParams = zod.object({
 });
 
 export const getCompanyReportExportQueryFormatDefault = `csv`;
+export const getCompanyReportExportQueryTemplateDefault = `board_ready`;
 
 export const GetCompanyReportExportQueryParams = zod.object({
-  format: zod.enum(["csv"]).default(getCompanyReportExportQueryFormatDefault),
+  format: zod
+    .enum(["csv", "pdf"])
+    .default(getCompanyReportExportQueryFormatDefault),
+  template: zod
+    .enum(["board_ready", "operational_detail", "executive_summary"])
+    .default(getCompanyReportExportQueryTemplateDefault),
 });
 
 /**

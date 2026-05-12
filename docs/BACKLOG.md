@@ -63,8 +63,8 @@ Options:
 ### #005 — Report export (PDF and CSV)
 **Priority: High**
 
-Charts are currently browser-rendered only. Initial server-side CSV export exists for company report domain scores; continue by adding:
-- PDF export of the full radar chart + score table (consider `html2canvas` + `jsPDF` or a server-side puppeteer/playwright approach)
+Charts are currently browser-rendered only. Initial server-side CSV export, template selection, report composition, and basic PDF generation exist for company reports; continue by adding:
+- Final PDF visual design for the full radar chart + score table
 - Excel export, if stakeholders need workbook-native report output
 - Export button on the Reports page
 
