@@ -1,15 +1,20 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { usersTable, companiesTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable } from "@workspace/db";
-import { eq, and, count, sql, inArray } from "drizzle-orm";
+import { eq, and, count, sql } from "drizzle-orm";
 import {
   GetCompanyReportResponse,
+  GetCompanyReportExportParams,
+  GetCompanyReportExportQueryParams,
   GetSuperAdminReportResponse,
   GetCompanyReportParams,
-  GetCompanyReportQueryParams,
   GetRadarDataResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
+import {
+  generateCompanyReportExport,
+  type CompanyReportExportFormat,
+} from "../lib/reportExports";
 
 const router: IRouter = Router();
 
@@ -52,26 +57,20 @@ async function getDomainScoresForCycle(cycleId: number) {
   });
 }
 
-// GET /reports/company/:id
-router.get("/reports/company/:id", requireAuth, async (req: any, res): Promise<void> => {
-  const params = GetCompanyReportParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-
+async function canAccessCompanyReport(req: any, companyId: number) {
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
   if (!currentUser || (currentUser.role !== "super_admin" && currentUser.role !== "company_admin")) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
+    return false;
   }
-  if (currentUser.role === "company_admin" && currentUser.companyId !== params.data.id) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
+  return currentUser.role === "super_admin" || currentUser.companyId === companyId;
+}
 
-  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, params.data.id));
-  if (!company) { res.status(404).json({ error: "Company not found" }); return; }
+async function buildCompanyReport(companyId: number) {
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
+  if (!company) return null;
 
-  const assessmentCycles = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, params.data.id)).orderBy(assessmentCyclesTable.createdAt);
-  const companyActions = await db.select().from(actionsTable).where(eq(actionsTable.companyId, params.data.id));
+  const assessmentCycles = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, companyId)).orderBy(assessmentCyclesTable.createdAt);
+  const companyActions = await db.select().from(actionsTable).where(eq(actionsTable.companyId, companyId));
 
   const cyclesFormatted = await Promise.all(assessmentCycles.map(async (cycle: any) => {
     const assignees = await db.select().from(assessmentAssigneesTable).where(eq(assessmentAssigneesTable.assessmentId, cycle.id));
@@ -87,7 +86,6 @@ router.get("/reports/company/:id", requireAuth, async (req: any, res): Promise<v
     };
   }));
 
-  // Progress data
   const progressCycles = await Promise.all(assessmentCycles.map(async (cycle: any) => {
     const domainScores = await getDomainScoresForCycle(cycle.id);
     const validScores = domainScores.filter(d => d.score != null).map(d => d.score as number);
@@ -111,7 +109,6 @@ router.get("/reports/company/:id", requireAuth, async (req: any, res): Promise<v
     updatedAt: a.updatedAt instanceof Date ? a.updatedAt.toISOString() : a.updatedAt,
   }));
 
-  // Latest results if there are completed assessments
   let latestResults = null;
   const completedCycles = assessmentCycles.filter((c: any) => c.status === "completed");
   if (completedCycles.length > 0) {
@@ -125,13 +122,57 @@ router.get("/reports/company/:id", requireAuth, async (req: any, res): Promise<v
     };
   }
 
-  res.json(GetCompanyReportResponse.parse({
+  return GetCompanyReportResponse.parse({
     company: formatCompany(company),
     assessmentCycles: cyclesFormatted,
     latestResults,
     progressData: { cycles: progressCycles },
     actions: actionsFormatted,
-  }));
+  });
+}
+
+// GET /reports/company/:id
+router.get("/reports/company/:id", requireAuth, async (req: any, res): Promise<void> => {
+  const params = GetCompanyReportParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  if (!(await canAccessCompanyReport(req, params.data.id))) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const report = await buildCompanyReport(params.data.id);
+  if (!report) { res.status(404).json({ error: "Company not found" }); return; }
+
+  res.json(report);
+});
+
+// GET /reports/company/:id/export
+router.get("/reports/company/:id/export", requireAuth, async (req: any, res): Promise<void> => {
+  const params = GetCompanyReportExportParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const query = GetCompanyReportExportQueryParams.safeParse({
+    ...req.query,
+    format: req.query.format ?? "csv",
+  });
+  if (!query.success) { res.status(400).json({ error: query.error.message }); return; }
+
+  if (!(await canAccessCompanyReport(req, params.data.id))) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const report = await buildCompanyReport(params.data.id);
+  if (!report) { res.status(404).json({ error: "Company not found" }); return; }
+
+  const exportResult = generateCompanyReportExport(
+    report,
+    query.data.format as CompanyReportExportFormat,
+  );
+  res.setHeader("Content-Type", exportResult.contentType);
+  res.setHeader("Content-Disposition", `attachment; filename="${exportResult.fileName}"`);
+  res.status(200).send(exportResult.body);
 });
 
 // GET /reports/cross-company-radar  (Super Admin only)

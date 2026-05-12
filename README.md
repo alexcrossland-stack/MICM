@@ -292,7 +292,7 @@ These credentials are only valid against the Replit development Clerk tenant and
 - **Progress over time**: line chart showing domain score trends across cycles
 - **Action summary**: open/in-progress/completed action counts per domain
 
-**Export**: no server-side PDF or CSV export is currently implemented. Charts are browser-rendered only. Adding export is listed in the backlog (`docs/BACKLOG.md`).
+**Export**: company report CSV export is available from `GET /api/reports/company/{id}/export?format=csv`. The CSV currently includes domain scores per assessment cycle. PDF/Excel export and chart rendering remain backlog items (`docs/BACKLOG.md`).
 
 ---
 

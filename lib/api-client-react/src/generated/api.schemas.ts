@@ -591,6 +591,17 @@ export type GetCompanyReportParams = {
   assessmentId?: number | null;
 };
 
+export type GetCompanyReportExportParams = {
+  format?: GetCompanyReportExportFormat;
+};
+
+export type GetCompanyReportExportFormat =
+  (typeof GetCompanyReportExportFormat)[keyof typeof GetCompanyReportExportFormat];
+
+export const GetCompanyReportExportFormat = {
+  csv: "csv",
+} as const;
+
 export type GetCrossCompanyRadarParams = {
   /**
    * Comma-separated list of company IDs to compare

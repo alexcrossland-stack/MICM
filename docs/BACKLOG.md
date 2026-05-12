@@ -63,9 +63,9 @@ Options:
 ### #005 — Report export (PDF and CSV)
 **Priority: High**
 
-Charts are currently browser-rendered only with no export capability. Add:
-- CSV export of domain scores per assessment cycle
+Charts are currently browser-rendered only. Initial server-side CSV export exists for company report domain scores; continue by adding:
 - PDF export of the full radar chart + score table (consider `html2canvas` + `jsPDF` or a server-side puppeteer/playwright approach)
+- Excel export, if stakeholders need workbook-native report output
 - Export button on the Reports page
 
 ---

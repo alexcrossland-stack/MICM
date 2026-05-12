@@ -542,7 +542,16 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(companyReportResponse.status).toBe(200);
     expect(companyReportResponse.body.company.id).toBe(1);
 
+    const exportResponse = await request(app).get("/api/reports/company/1/export").query({ format: "csv" });
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.headers["content-type"]).toContain("text/csv");
+    expect(exportResponse.headers["content-disposition"]).toContain("acme-precision-maturity-report.csv");
+    expect(exportResponse.text).toContain("company_id,company_name,assessment_id,assessment_name");
+    expect(exportResponse.text).toContain("1,Acme Precision,103,A Complete");
+    expect(exportResponse.text).toContain("1,Acme Precision,103,A Complete,2026-01-01T00:00:00.000Z,1,Strategy,3,Developing,3.5");
+
     expect((await request(app).get("/api/reports/company/2")).status).toBe(403);
+    expect((await request(app).get("/api/reports/company/2/export").query({ format: "csv" })).status).toBe(403);
   });
 
   it("smoke-tests Super Admin reporting and cross-company radar endpoints", async () => {

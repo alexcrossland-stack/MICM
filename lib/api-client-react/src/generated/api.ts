@@ -32,6 +32,7 @@ import type {
   CreateInvitationBody,
   Domain,
   GetActionsSummaryParams,
+  GetCompanyReportExportParams,
   GetCompanyReportParams,
   GetCrossCompanyRadarParams,
   GetProgressOverTimeParams,
@@ -2894,6 +2895,123 @@ export function useGetCompanyReport<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetCompanyReportQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Export company assessment report data
+ */
+export const getGetCompanyReportExportUrl = (
+  id: number,
+  params?: GetCompanyReportExportParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/company/${id}/export?${stringifiedParams}`
+    : `/api/reports/company/${id}/export`;
+};
+
+export const getCompanyReportExport = async (
+  id: number,
+  params?: GetCompanyReportExportParams,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getGetCompanyReportExportUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCompanyReportExportQueryKey = (
+  id: number,
+  params?: GetCompanyReportExportParams,
+) => {
+  return [
+    `/api/reports/company/${id}/export`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetCompanyReportExportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCompanyReportExport>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: GetCompanyReportExportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCompanyReportExport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCompanyReportExportQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCompanyReportExport>>
+  > = ({ signal }) =>
+    getCompanyReportExport(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCompanyReportExport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCompanyReportExportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCompanyReportExport>>
+>;
+export type GetCompanyReportExportQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export company assessment report data
+ */
+
+export function useGetCompanyReportExport<
+  TData = Awaited<ReturnType<typeof getCompanyReportExport>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: GetCompanyReportExportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCompanyReportExport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCompanyReportExportQueryOptions(
+    id,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
