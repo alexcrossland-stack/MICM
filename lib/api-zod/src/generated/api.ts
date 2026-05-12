@@ -750,6 +750,19 @@ export const GetCompanyReportResponse = zod.object({
 });
 
 /**
+ * @summary Export company assessment report data
+ */
+export const GetCompanyReportExportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const getCompanyReportExportQueryFormatDefault = `csv`;
+
+export const GetCompanyReportExportQueryParams = zod.object({
+  format: zod.enum(["csv"]).default(getCompanyReportExportQueryFormatDefault),
+});
+
+/**
  * @summary Cross-company aggregated report (Super Admin only)
  */
 export const GetSuperAdminReportResponse = zod.object({

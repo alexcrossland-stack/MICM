@@ -682,6 +682,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/CompanyReport"
 
+  /reports/company/{id}/export:
+    get:
+      operationId: getCompanyReportExport
+      tags: [reports]
+      summary: Export company assessment report data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv]
+            default: csv
+      responses:
+        "200":
+          description: Exported company report
+          headers:
+            Content-Disposition:
+              description: Attachment filename for the generated export
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+
   /reports/superadmin:
     get:
       operationId: getSuperAdminReport
