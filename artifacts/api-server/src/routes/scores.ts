@@ -70,6 +70,22 @@ router.post("/scores", requireAuth, async (req: any, res): Promise<void> => {
 
   const [cycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, assessmentId));
   if (!cycle) { res.status(404).json({ error: "Assessment not found" }); return; }
+  if (currentUser.role !== "super_admin" && currentUser.companyId !== cycle.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (cycle.status !== "active") {
+    res.status(400).json({ error: "Assessment is not active" });
+    return;
+  }
+
+  const [assignee] = await db.select().from(assessmentAssigneesTable).where(
+    and(eq(assessmentAssigneesTable.assessmentId, assessmentId), eq(assessmentAssigneesTable.userId, currentUser.id)),
+  );
+  if (!assignee) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   const results = [];
   for (const scoreInput of scores) {

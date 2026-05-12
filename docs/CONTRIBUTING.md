@@ -12,17 +12,20 @@ Run all of these in order and confirm each exits cleanly:
 # 1. Full typecheck across all packages
 pnpm run typecheck
 
-# 2. Confirm generated API files are in sync with the OpenAPI spec
+# 2. Run the automated test suite
+pnpm test
+
+# 3. Confirm generated API files are in sync with the OpenAPI spec
 #    (Only needed if you changed openapi.yaml or ran codegen)
 pnpm --filter @workspace/api-spec run codegen
 pnpm run typecheck   # re-run after codegen to catch any mismatches
 
-# 3. Verify lib/api-zod/src/index.ts contains exactly one line:
+# 4. Verify lib/api-zod/src/index.ts contains exactly one line:
 #      export * from "./generated/api";
 cat lib/api-zod/src/index.ts
 ```
 
-There are currently **no automated tests** — all quality verification is manual. Adding a test suite is listed in the backlog.
+The initial automated suite uses **Vitest** and **Supertest**. It covers safety-critical API behavior with mocked Clerk auth and an in-memory DB test double, so it does not require real Clerk keys, a PostgreSQL database, secrets, or production data.
 
 ---
 

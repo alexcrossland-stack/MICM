@@ -36,6 +36,16 @@ function formatAction(a: any) {
   };
 }
 
+function canReadCompany(currentUser: any, companyId: number) {
+  return currentUser.role === "super_admin" || currentUser.companyId === companyId;
+}
+
+function canManageAction(currentUser: any, action: any) {
+  if (currentUser.role === "super_admin") return true;
+  if (currentUser.role === "company_admin" && currentUser.companyId === action.companyId) return true;
+  return currentUser.id === action.assignedUserId && currentUser.companyId === action.companyId;
+}
+
 // GET /actions/summary
 router.get("/actions/summary", requireAuth, async (req: any, res): Promise<void> => {
   const queryParams = GetActionsSummaryQueryParams.safeParse(req.query);
@@ -45,6 +55,10 @@ router.get("/actions/summary", requireAuth, async (req: any, res): Promise<void>
   if (!currentUser) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const companyId = queryParams.data.companyId;
+  if (!canReadCompany(currentUser, companyId)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
   const actions = await db.select().from(actionsTable).where(eq(actionsTable.companyId, companyId));
 
   const summary = {
@@ -95,6 +109,10 @@ router.post("/actions", requireAuth, async (req: any, res): Promise<void> => {
   }
   const parsed = CreateActionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (currentUser.role === "company_admin" && currentUser.companyId !== parsed.data.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   const [action] = await db.insert(actionsTable).values({
     companyId: parsed.data.companyId,
@@ -120,6 +138,10 @@ router.get("/actions/:id", requireAuth, async (req: any, res): Promise<void> => 
 
   const [action] = await db.select().from(actionsTable).where(eq(actionsTable.id, params.data.id));
   if (!action) { res.status(404).json({ error: "Action not found" }); return; }
+  if (!canReadCompany(currentUser, action.companyId)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   res.json(GetActionResponse.parse(formatAction(action)));
 });
@@ -131,6 +153,13 @@ router.patch("/actions/:id", requireAuth, async (req: any, res): Promise<void> =
 
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
   if (!currentUser) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [existingAction] = await db.select().from(actionsTable).where(eq(actionsTable.id, params.data.id));
+  if (!existingAction) { res.status(404).json({ error: "Action not found" }); return; }
+  if (!canManageAction(currentUser, existingAction)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   const parsed = UpdateActionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -145,7 +174,6 @@ router.patch("/actions/:id", requireAuth, async (req: any, res): Promise<void> =
   if (parsed.data.completedDate !== undefined) updates.completedDate = parsed.data.completedDate ? new Date(parsed.data.completedDate) : null;
 
   const [action] = await db.update(actionsTable).set(updates).where(eq(actionsTable.id, params.data.id)).returning();
-  if (!action) { res.status(404).json({ error: "Action not found" }); return; }
   res.json(GetActionResponse.parse(formatAction(action)));
 });
 
@@ -156,6 +184,12 @@ router.delete("/actions/:id", requireAuth, async (req: any, res): Promise<void> 
 
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
   if (!currentUser || (currentUser.role !== "super_admin" && currentUser.role !== "company_admin")) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const [existingAction] = await db.select().from(actionsTable).where(eq(actionsTable.id, params.data.id));
+  if (!existingAction) { res.status(404).json({ error: "Action not found" }); return; }
+  if (currentUser.role === "company_admin" && currentUser.companyId !== existingAction.companyId) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }

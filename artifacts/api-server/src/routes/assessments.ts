@@ -67,6 +67,10 @@ router.post("/assessments", requireAuth, async (req: any, res): Promise<void> =>
   }
   const parsed = CreateAssessmentBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (currentUser.role === "company_admin" && currentUser.companyId !== parsed.data.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   const [cycle] = await db.insert(assessmentCyclesTable).values({
     companyId: parsed.data.companyId,
@@ -112,6 +116,13 @@ router.patch("/assessments/:id", requireAuth, async (req: any, res): Promise<voi
   const parsed = UpdateAssessmentBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [existingCycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, params.data.id));
+  if (!existingCycle) { res.status(404).json({ error: "Assessment not found" }); return; }
+  if (currentUser.role === "company_admin" && currentUser.companyId !== existingCycle.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
   const updates: any = {};
   if (parsed.data.name != null) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
@@ -138,6 +149,23 @@ router.post("/assessments/:id/assign", requireAuth, async (req: any, res): Promi
   const parsed = AssignAssessmentBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [cycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, params.data.id));
+  if (!cycle) { res.status(404).json({ error: "Assessment not found" }); return; }
+  if (currentUser.role === "company_admin" && currentUser.companyId !== cycle.companyId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (parsed.data.userIds.length > 0) {
+    const assignees = await db.select().from(usersTable).where(inArray(usersTable.id, parsed.data.userIds));
+    const allAssigneesInCompany =
+      assignees.length === parsed.data.userIds.length &&
+      assignees.every((user: any) => user.companyId === cycle.companyId);
+    if (!allAssigneesInCompany) {
+      res.status(400).json({ error: "Assignees must belong to the assessment company" });
+      return;
+    }
+  }
+
   // Remove all existing assignees and re-add
   await db.delete(assessmentAssigneesTable).where(eq(assessmentAssigneesTable.assessmentId, params.data.id));
   if (parsed.data.userIds.length > 0) {
@@ -146,8 +174,6 @@ router.post("/assessments/:id/assign", requireAuth, async (req: any, res): Promi
     );
   }
 
-  const [cycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, params.data.id));
-  if (!cycle) { res.status(404).json({ error: "Assessment not found" }); return; }
   res.json(GetAssessmentResponse.parse(await buildAssessmentCycle(cycle)));
 });
 
