@@ -66,7 +66,6 @@ Options:
 Charts are currently browser-rendered only. Initial server-side CSV export, template selection, report composition, and basic PDF generation exist for company reports; continue by adding:
 - Final PDF visual design for the full radar chart + score table
 - Excel export, if stakeholders need workbook-native report output
-- Export button on the Reports page
 
 ---
 

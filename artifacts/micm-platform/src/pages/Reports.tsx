@@ -8,7 +8,13 @@ import {
   useGetCompanyReport,
   useGetCrossCompanyRadar,
   useGetSuperAdminReport,
+  GetCompanyReportExportFormat,
+  GetCompanyReportExportTemplate,
+  type GetCompanyReportExportFormat as ReportExportFormat,
+  type GetCompanyReportExportTemplate as ReportTemplate,
 } from "@workspace/api-client-react";
+import { getApiUrl } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend,
 } from "recharts";
-import { BarChart3, TrendingUp, Building2 } from "lucide-react";
+import { BarChart3, TrendingUp, Building2, Download, Loader2 } from "lucide-react";
 import {
   ScoreBandText,
   AssessmentMultiSelect,
@@ -28,12 +34,33 @@ import {
 } from "@/components/RadarOverlay";
 import { ScoreGuide } from "@/components/ScoreGuide";
 
+const REPORT_TEMPLATE_OPTIONS: Array<{ value: ReportTemplate; label: string }> = [
+  { value: GetCompanyReportExportTemplate.board_ready, label: "Board-ready report" },
+  { value: GetCompanyReportExportTemplate.operational_detail, label: "Operational detail report" },
+  { value: GetCompanyReportExportTemplate.executive_summary, label: "Executive summary only" },
+];
+
+const REPORT_FORMAT_OPTIONS: Array<{ value: ReportExportFormat; label: string }> = [
+  { value: GetCompanyReportExportFormat.csv, label: "CSV" },
+  { value: GetCompanyReportExportFormat.pdf, label: "PDF" },
+];
+
+function filenameFromDisposition(disposition: string | null, fallback: string) {
+  const match = disposition?.match(/filename="?(?<filename>[^";]+)"?/);
+  return match?.groups?.filename ?? fallback;
+}
+
 export default function ReportsPage() {
-  const { companyId, isSuperAdmin } = useCurrentUser();
+  const { companyId, isSuperAdmin, isCompanyAdmin, getToken } = useCurrentUser();
+  const { toast } = useToast();
 
   // ─── Single-company report state ─────────────────────────────────────────────
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(companyId ?? null);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<number[]>([]);
+  const [reportTemplate, setReportTemplate] = useState<ReportTemplate>(GetCompanyReportExportTemplate.board_ready);
+  const [exportFormat, setExportFormat] = useState<ReportExportFormat>(GetCompanyReportExportFormat.csv);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
 
   // ─── Cross-company comparison state (Super Admin only) ────────────────────────
   const [selectedCrossCompanyIds, setSelectedCrossCompanyIds] = useState<number[]>([]);
@@ -102,10 +129,55 @@ export default function ReportsPage() {
     }) ?? [];
 
   const completedAssessments = (assessments ?? []).filter((a) => a.status === "completed");
+  const canExportReports = isSuperAdmin || isCompanyAdmin;
 
   const sortedAssessments = assessments
     ? [...assessments].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     : [];
+
+  async function handleExport() {
+    if (!targetCompanyId || !canExportReports) return;
+    setIsExporting(true);
+    setExportStatus(null);
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams({
+        format: exportFormat,
+        template: reportTemplate,
+      });
+      const response = await fetch(getApiUrl(`/reports/company/${targetCompanyId}/export?${params.toString()}`), {
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        const message = response.status === 403
+          ? "You do not have access to export this report."
+          : "Report export failed. Please try again.";
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const fallbackName = `company-${targetCompanyId}-report.${exportFormat}`;
+      const fileName = filenameFromDisposition(response.headers.get("Content-Disposition"), fallbackName);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      const message = `${fileName} downloaded.`;
+      setExportStatus(message);
+      toast({ title: "Report exported", description: message });
+    } catch (error: any) {
+      const message = error?.message ?? "Report export failed. Please try again.";
+      setExportStatus(message);
+      toast({ title: "Export failed", description: message, variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -187,6 +259,54 @@ export default function ReportsPage() {
 
       {report && (
         <>
+          {canExportReports && (
+            <Card className="border-card-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Export Report
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto] sm:items-end">
+                  <div>
+                    <Label>Template</Label>
+                    <Select value={reportTemplate} onValueChange={(value) => setReportTemplate(value as ReportTemplate)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REPORT_TEMPLATE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Format</Label>
+                    <Select value={exportFormat} onValueChange={(value) => setExportFormat(value as ReportExportFormat)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REPORT_FORMAT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={handleExport} disabled={!targetCompanyId || isExporting} className="sm:self-end">
+                    {isExporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                    {isExporting ? "Exporting" : "Download"}
+                  </Button>
+                </div>
+                {exportStatus && (
+                  <p className="text-xs text-muted-foreground mt-2">{exportStatus}</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Summary cards */}
           <div className="grid sm:grid-cols-3 gap-4">
             <Card className="border-card-border">
