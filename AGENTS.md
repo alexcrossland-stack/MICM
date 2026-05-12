@@ -155,11 +155,15 @@ Domain scores on radar charts are the arithmetic mean of all criteria scores for
 
 ## Demo Mode
 
-`POST /api/demo/sign-in-token` returns a Clerk sign-in token for one of three hardcoded demo accounts. It is **disabled in production** (`NODE_ENV === "production"` → HTTP 404).
+`POST /api/demo/sign-in-token` returns a Clerk sign-in token for one of three hardcoded demo accounts. It is **disabled unless explicitly enabled outside production**:
+
+- `NODE_ENV === "production"` → HTTP 404
+- `ENABLE_DEMO_AUTH !== "true"` → HTTP 404
+- Frontend demo panel requires `VITE_ENABLE_DEMO_AUTH === "true"` and is hidden in production builds
 
 The hardcoded Clerk user IDs in `demo.ts` are specific to the Replit development Clerk tenant. If you are working against a different Clerk tenant, run `seed-demo-users` and update the `DEMO_USERS` map with the new IDs.
 
-**Never enable the demo endpoint in production. Never remove the `IS_PRODUCTION` guard.**
+**Never enable demo auth flags in production. Never remove the production guard.**
 
 ---
 

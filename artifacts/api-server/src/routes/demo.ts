@@ -1,5 +1,5 @@
 /**
- * Demo-only routes — disabled entirely in production.
+ * Demo-only routes — disabled unless explicitly enabled outside production.
  * Provides one-click sign-in tokens for the three pre-seeded demo accounts,
  * allowing testers to bypass the email-verification step that Clerk enforces
  * in development mode.  These endpoints must NEVER be reachable in production.
@@ -26,15 +26,17 @@ const DEMO_USERS: Record<string, { clerkId: string; label: string }> = {
   },
 };
 
-const IS_PRODUCTION = process.env["NODE_ENV"] === "production";
+function isDemoAuthEnabled() {
+  return process.env["NODE_ENV"] !== "production" && process.env["ENABLE_DEMO_AUTH"] === "true";
+}
 
 // POST /api/demo/sign-in-token
 // Returns a short-lived Clerk sign-in token for a demo account.
 // The client redirects to /sign-in?__clerk_ticket=<token> and Clerk's
 // frontend SDK completes the session without any further verification.
 router.post("/demo/sign-in-token", async (req: any, res): Promise<void> => {
-  if (IS_PRODUCTION) {
-    // Return a generic 404 so the endpoint is invisible in production.
+  if (!isDemoAuthEnabled()) {
+    // Return a generic 404 so the endpoint is invisible when disabled.
     res.status(404).json({ error: "Not found" });
     return;
   }

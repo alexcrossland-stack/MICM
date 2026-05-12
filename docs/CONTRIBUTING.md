@@ -118,9 +118,11 @@ Complete the following against a running local or staging environment with all t
 
 ### 10. Demo Mode Isolation
 
-- [ ] Confirm `POST /api/demo/sign-in-token` returns 200 in development
+- [ ] Confirm `POST /api/demo/sign-in-token` returns 404 when `ENABLE_DEMO_AUTH` is unset or false
+- [ ] Confirm `POST /api/demo/sign-in-token` returns 200 in development only when `ENABLE_DEMO_AUTH=true`
 - [ ] Confirm `POST /api/demo/sign-in-token` returns 404 when `NODE_ENV=production`
-- [ ] Confirm the demo credentials panel is not visible in production
+- [ ] Confirm the demo credentials panel is visible only in non-production builds when `VITE_ENABLE_DEMO_AUTH=true`
+- [ ] Confirm the demo credentials panel is not visible in production builds
 
 ---
 
@@ -155,6 +157,7 @@ Use `pnpm --filter @workspace/db run push:dev` only for disposable local databas
 - [ ] No secrets, API keys, or passwords committed (check `.env` is gitignored)
 - [ ] Tenant isolation enforced: all DB queries for Company Admin / Company User filter by `companyId`
 - [ ] Demo endpoint returns 404 in production (`NODE_ENV === "production"`)
+- [ ] Demo endpoint returns 404 unless `ENABLE_DEMO_AUTH=true` outside production
 - [ ] New routes that require authentication include Clerk auth middleware
 - [ ] New Super Admin routes check `role === "super_admin"` explicitly
 
