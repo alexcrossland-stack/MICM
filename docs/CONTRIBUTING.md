@@ -140,9 +140,13 @@ When making API changes, verify:
 
 - [ ] New table or column added to `lib/db/src/schema/`
 - [ ] Exported from `lib/db/src/schema/index.ts`
-- [ ] `pnpm --filter @workspace/db run push` applied successfully
+- [ ] Migration generated with `pnpm --filter @workspace/db run generate`
+- [ ] Generated SQL in `lib/db/migrations/` reviewed for destructive operations
+- [ ] Migration applied locally with `DATABASE_URL=<local_dev_url> pnpm --filter @workspace/db run migrate`
 - [ ] `pnpm run typecheck` passes cleanly
 - [ ] Seed scripts updated if new required data is expected
+
+Use `pnpm --filter @workspace/db run push:dev` only for disposable local databases while prototyping. Do not use schema push for staging or production.
 
 ---
 

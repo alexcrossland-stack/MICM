@@ -225,10 +225,11 @@ No accessibility audit has been done. Run Axe or Lighthouse against key pages an
 ### #020 — Database migration history
 **Priority: Medium**
 
-Currently `drizzle-kit push` is used with no migration file history. Switch to `drizzle-kit generate` + `drizzle-kit migrate` so that:
+Initial migration discipline is in place: schema changes should use `drizzle-kit generate` + `drizzle-kit migrate`, with `push:dev` reserved for disposable local databases. Remaining work:
 - Every schema change is tracked as a timestamped SQL migration file
 - Migrations can be run idempotently in CI and production deployments
 - Rollback is possible by reverting a migration file
+- Establish and apply a verified baseline migration for existing environments that predate migration history
 
 ---
 

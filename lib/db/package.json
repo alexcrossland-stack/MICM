@@ -8,8 +8,9 @@
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
-    "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+    "generate": "drizzle-kit generate --config ./drizzle.config.ts",
+    "migrate": "node -e \"if (!process.env.DATABASE_URL) { console.error('DATABASE_URL must be set to apply migrations'); process.exit(1); }\" && drizzle-kit migrate --config ./drizzle.config.ts",
+    "push:dev": "node -e \"if (!process.env.DATABASE_URL) { console.error('DATABASE_URL must be set for local schema sync'); process.exit(1); }\" && drizzle-kit push --config ./drizzle.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

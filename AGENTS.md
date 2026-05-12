@@ -71,7 +71,9 @@ This setting (1440 minutes) is a supply-chain attack defence. Do not set it to 0
 | Run API server (dev) | `pnpm --filter @workspace/api-server run dev` |
 | Run frontend (dev) | `pnpm --filter @workspace/micm-platform run dev` |
 | Regenerate API hooks/schemas | `pnpm --filter @workspace/api-spec run codegen` |
-| Push DB schema | `pnpm --filter @workspace/db run push` |
+| Generate DB migration | `pnpm --filter @workspace/db run generate` |
+| Apply DB migrations | `DATABASE_URL=<target_url> pnpm --filter @workspace/db run migrate` |
+| Local throwaway schema sync | `DATABASE_URL=<local_dev_url> pnpm --filter @workspace/db run push:dev` |
 | Seed domains | `pnpm --filter @workspace/scripts run seed-domains` |
 | Seed demo users | `pnpm --filter @workspace/scripts run seed-demo-users` |
 | Build API | `pnpm --filter @workspace/api-server run build` |
@@ -96,9 +98,11 @@ This setting (1440 minutes) is a supply-chain attack defence. Do not set it to 0
 
 1. Create or edit a file in `lib/db/src/schema/`
 2. Export the table and its insert schema from `lib/db/src/schema/index.ts`
-3. Run `pnpm --filter @workspace/db run push` to apply the schema to the dev database
-4. Export the table from `lib/db/src/index.ts` if route handlers need to import it
-5. Run `pnpm run typecheck`
+3. Run `pnpm --filter @workspace/db run generate`
+4. Review and commit the generated SQL in `lib/db/migrations/`
+5. Apply migrations locally with `DATABASE_URL=<local_dev_url> pnpm --filter @workspace/db run migrate`
+6. Export the table from `lib/db/src/index.ts` if route handlers need to import it
+7. Run `pnpm run typecheck`
 
 ---
 
@@ -108,6 +112,7 @@ This setting (1440 minutes) is a supply-chain attack defence. Do not set it to 0
 |---|---|
 | OpenAPI spec | `lib/api-spec/openapi.yaml` |
 | Drizzle schema | `lib/db/src/schema/*.ts` |
+| DB migrations | `lib/db/migrations/` |
 | API route handlers | `artifacts/api-server/src/routes/*.ts` |
 | Auth middleware | `artifacts/api-server/src/middlewares/` |
 | React pages | `artifacts/micm-platform/src/pages/` |
@@ -183,7 +188,7 @@ These things are Replit-specific and should not be "fixed" by an agent working o
 
 - **Codegen sometimes adds extra exports to `lib/api-zod/src/index.ts`** — after every codegen run, verify the file contains only `export * from "./generated/api";`
 - **Clerk `routing="path"` + Wouter**: the `path` prop on Clerk's `<SignIn>` / `<SignUp>` must be the full browser path including `BASE`. Wouter's `<Redirect>` strips the base automatically.
-- **No migration history**: `drizzle-kit push` is used. There are no migration files. Schema changes are applied by running `push` against the target database.
+- **Migration baseline required for existing environments**: schema changes must use generated migrations. Existing databases that predate migration history need the initial baseline migration marked as applied before running new migrations.
 - **`PORT` and `BASE_PATH` are required** at both API server and Vite startup — they are injected by Replit workflows. Set them in your shell when running locally.
 - **esbuild platform overrides** in `pnpm-workspace.yaml` strip all non-Linux native binaries. `pnpm install` will fail on macOS/Windows unless these overrides are commented out.
 - **Domain data is read-only at runtime** — the six MICM domains are seeded once and never written to by the application. There is no admin UI for domains.
