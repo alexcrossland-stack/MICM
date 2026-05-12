@@ -42,6 +42,9 @@ import type {
   ListAssessmentsParams,
   ListInvitationsParams,
   ListScoresParams,
+  ListTargetsParams,
+  MaturityTarget,
+  ProgrammeIntelligenceReport,
   ProgressData,
   RadarData,
   Score,
@@ -51,6 +54,7 @@ import type {
   UpdateAssessmentBody,
   UpdateCompanyBody,
   UpdateUserBody,
+  UpsertMaturityTargetBody,
   User,
   UserRole,
 } from "./api.schemas";
@@ -3068,6 +3072,287 @@ export function useGetCrossCompanyRadar<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetCrossCompanyRadarQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List maturity targets for a company
+ */
+export const getListTargetsUrl = (params?: ListTargetsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/targets?${stringifiedParams}`
+    : `/api/targets`;
+};
+
+export const listTargets = async (
+  params?: ListTargetsParams,
+  options?: RequestInit,
+): Promise<MaturityTarget[]> => {
+  return customFetch<MaturityTarget[]>(getListTargetsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTargetsQueryKey = (params?: ListTargetsParams) => {
+  return [`/api/targets`, ...(params ? [params] : [])] as const;
+};
+
+export const getListTargetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTargets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListTargetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTargets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTargetsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTargets>>> = ({
+    signal,
+  }) => listTargets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTargets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTargetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTargets>>
+>;
+export type ListTargetsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List maturity targets for a company
+ */
+
+export function useListTargets<
+  TData = Awaited<ReturnType<typeof listTargets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListTargetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTargets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTargetsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create or update a maturity target for a domain
+ */
+export const getUpsertTargetUrl = (companyId: number, domainId: number) => {
+  return `/api/targets/${companyId}/${domainId}`;
+};
+
+export const upsertTarget = async (
+  companyId: number,
+  domainId: number,
+  upsertMaturityTargetBody: UpsertMaturityTargetBody,
+  options?: RequestInit,
+): Promise<MaturityTarget> => {
+  return customFetch<MaturityTarget>(getUpsertTargetUrl(companyId, domainId), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertMaturityTargetBody),
+  });
+};
+
+export const getUpsertTargetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertTarget>>,
+    TError,
+    {
+      companyId: number;
+      domainId: number;
+      data: BodyType<UpsertMaturityTargetBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertTarget>>,
+  TError,
+  {
+    companyId: number;
+    domainId: number;
+    data: BodyType<UpsertMaturityTargetBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["upsertTarget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertTarget>>,
+    {
+      companyId: number;
+      domainId: number;
+      data: BodyType<UpsertMaturityTargetBody>;
+    }
+  > = (props) => {
+    const { companyId, domainId, data } = props ?? {};
+
+    return upsertTarget(companyId, domainId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertTargetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertTarget>>
+>;
+export type UpsertTargetMutationBody = BodyType<UpsertMaturityTargetBody>;
+export type UpsertTargetMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create or update a maturity target for a domain
+ */
+export const useUpsertTarget = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertTarget>>,
+    TError,
+    {
+      companyId: number;
+      domainId: number;
+      data: BodyType<UpsertMaturityTargetBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertTarget>>,
+  TError,
+  {
+    companyId: number;
+    domainId: number;
+    data: BodyType<UpsertMaturityTargetBody>;
+  },
+  TContext
+> => {
+  return useMutation(getUpsertTargetMutationOptions(options));
+};
+
+/**
+ * @summary Programme Intelligence Dashboard data (Super Admin only)
+ */
+export const getGetProgrammeIntelligenceUrl = () => {
+  return `/api/reports/programme`;
+};
+
+export const getProgrammeIntelligence = async (
+  options?: RequestInit,
+): Promise<ProgrammeIntelligenceReport> => {
+  return customFetch<ProgrammeIntelligenceReport>(
+    getGetProgrammeIntelligenceUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProgrammeIntelligenceQueryKey = () => {
+  return [`/api/reports/programme`] as const;
+};
+
+export const getGetProgrammeIntelligenceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProgrammeIntelligence>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProgrammeIntelligence>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProgrammeIntelligenceQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProgrammeIntelligence>>
+  > = ({ signal }) => getProgrammeIntelligence({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProgrammeIntelligence>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProgrammeIntelligenceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProgrammeIntelligence>>
+>;
+export type GetProgrammeIntelligenceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Programme Intelligence Dashboard data (Super Admin only)
+ */
+
+export function useGetProgrammeIntelligence<
+  TData = Awaited<ReturnType<typeof getProgrammeIntelligence>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProgrammeIntelligence>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProgrammeIntelligenceQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

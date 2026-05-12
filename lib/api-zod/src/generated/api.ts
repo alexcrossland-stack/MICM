@@ -792,3 +792,105 @@ export const GetCrossCompanyRadarResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary List maturity targets for a company
+ */
+export const ListTargetsQueryParams = zod.object({
+  companyId: zod.coerce.number().optional(),
+});
+
+export const ListTargetsResponseItem = zod.object({
+  id: zod.number(),
+  companyId: zod.number(),
+  domainId: zod.number(),
+  domainName: zod.string(),
+  targetScore: zod.number(),
+  targetDate: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListTargetsResponse = zod.array(ListTargetsResponseItem);
+
+/**
+ * @summary Create or update a maturity target for a domain
+ */
+export const UpsertTargetParams = zod.object({
+  companyId: zod.coerce.number(),
+  domainId: zod.coerce.number(),
+});
+
+export const upsertTargetBodyTargetScoreMin = 0;
+export const upsertTargetBodyTargetScoreMax = 4;
+
+export const UpsertTargetBody = zod.object({
+  targetScore: zod
+    .number()
+    .min(upsertTargetBodyTargetScoreMin)
+    .max(upsertTargetBodyTargetScoreMax),
+  targetDate: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+});
+
+export const UpsertTargetResponse = zod.object({
+  id: zod.number(),
+  companyId: zod.number(),
+  domainId: zod.number(),
+  domainName: zod.string(),
+  targetScore: zod.number(),
+  targetDate: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Programme Intelligence Dashboard data (Super Admin only)
+ */
+export const GetProgrammeIntelligenceResponse = zod.object({
+  kpis: zod.object({
+    participatingCompanies: zod.number(),
+    companiesWithCompletedAssessments: zod.number(),
+    averageMaturity: zod.number().nullish(),
+    actionCompletionRate: zod.number().nullish(),
+    assessmentCompletionRate: zod.number().nullish(),
+    weakestDomain: zod.string().nullish(),
+    strongestDomain: zod.string().nullish(),
+  }),
+  heatmap: zod.array(
+    zod.object({
+      companyId: zod.number(),
+      companyName: zod.string(),
+      sector: zod.string().nullish(),
+      overallScore: zod.number().nullish(),
+      domainScores: zod.array(
+        zod.object({
+          domainId: zod.number(),
+          domainName: zod.string(),
+          score: zod.number().nullish(),
+          band: zod.string().nullish(),
+        }),
+      ),
+    }),
+  ),
+  domainBenchmarks: zod.array(
+    zod.object({
+      domainId: zod.number(),
+      domainName: zod.string(),
+      averageScore: zod.number().nullish(),
+      minScore: zod.number().nullish(),
+      maxScore: zod.number().nullish(),
+      companiesScored: zod.number(),
+    }),
+  ),
+  riskCompanies: zod.array(
+    zod.object({
+      companyId: zod.number(),
+      companyName: zod.string(),
+      riskType: zod.string(),
+      detail: zod.string(),
+    }),
+  ),
+  domains: zod.array(zod.string()),
+});

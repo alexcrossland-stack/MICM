@@ -24,6 +24,8 @@ tags:
     description: Invitation management
   - name: reports
     description: Reporting and analytics
+  - name: targets
+    description: Maturity target management
 
 paths:
   /healthz:
@@ -712,6 +714,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RadarData"
+
+  /targets:
+    get:
+      operationId: listTargets
+      tags: [targets]
+      summary: List maturity targets for a company
+      parameters:
+        - name: companyId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of maturity targets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaturityTarget"
+
+  /targets/{companyId}/{domainId}:
+    put:
+      operationId: upsertTarget
+      tags: [targets]
+      summary: Create or update a maturity target for a domain
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertMaturityTargetBody"
+      responses:
+        "200":
+          description: Upserted maturity target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaturityTarget"
+
+  /reports/programme:
+    get:
+      operationId: getProgrammeIntelligence
+      tags: [reports]
+      summary: Programme Intelligence Dashboard data (Super Admin only)
+      responses:
+        "200":
+          description: Programme intelligence report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgrammeIntelligenceReport"
 
 components:
   schemas:
@@ -1438,3 +1504,161 @@ components:
         - completedAssessments
         - activeActions
         - domainScores
+
+    # ─── Targets ─────────────────────────────────────────────────────────────────
+
+    MaturityTarget:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        domainId:
+          type: integer
+        domainName:
+          type: string
+        targetScore:
+          type: number
+        targetDate:
+          type: ["string", "null"]
+          format: date-time
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - companyId
+        - domainId
+        - domainName
+        - targetScore
+        - createdAt
+        - updatedAt
+
+    UpsertMaturityTargetBody:
+      type: object
+      properties:
+        targetScore:
+          type: number
+          minimum: 0
+          maximum: 4
+        targetDate:
+          type: ["string", "null"]
+          format: date-time
+        notes:
+          type: ["string", "null"]
+      required:
+        - targetScore
+
+    # ─── Programme Intelligence ────────────────────────────────────────────────
+
+    ProgrammeKPIs:
+      type: object
+      properties:
+        participatingCompanies:
+          type: integer
+        companiesWithCompletedAssessments:
+          type: integer
+        averageMaturity:
+          type: ["number", "null"]
+        actionCompletionRate:
+          type: ["number", "null"]
+        assessmentCompletionRate:
+          type: ["number", "null"]
+        weakestDomain:
+          type: ["string", "null"]
+        strongestDomain:
+          type: ["string", "null"]
+      required:
+        - participatingCompanies
+        - companiesWithCompletedAssessments
+
+    CompanyHeatmapRow:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        companyName:
+          type: string
+        sector:
+          type: ["string", "null"]
+        overallScore:
+          type: ["number", "null"]
+        domainScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainScore"
+      required:
+        - companyId
+        - companyName
+        - domainScores
+
+    DomainBenchmark:
+      type: object
+      properties:
+        domainId:
+          type: integer
+        domainName:
+          type: string
+        averageScore:
+          type: ["number", "null"]
+        minScore:
+          type: ["number", "null"]
+        maxScore:
+          type: ["number", "null"]
+        companiesScored:
+          type: integer
+      required:
+        - domainId
+        - domainName
+        - companiesScored
+
+    RiskCompany:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        companyName:
+          type: string
+        riskType:
+          type: string
+        detail:
+          type: string
+      required:
+        - companyId
+        - companyName
+        - riskType
+        - detail
+
+    ProgrammeIntelligenceReport:
+      type: object
+      properties:
+        kpis:
+          $ref: "#/components/schemas/ProgrammeKPIs"
+        heatmap:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyHeatmapRow"
+        domainBenchmarks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainBenchmark"
+        riskCompanies:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskCompany"
+        domains:
+          type: array
+          items:
+            type: string
+      required:
+        - kpis
+        - heatmap
+        - domainBenchmarks
+        - riskCompanies
+        - domains

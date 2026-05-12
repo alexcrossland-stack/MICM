@@ -17,6 +17,8 @@ import UsersPage from "@/pages/Users";
 import CompaniesPage from "@/pages/Companies";
 import ReportsPage from "@/pages/Reports";
 import OnboardingPage from "@/pages/Onboarding";
+import AnalyticsPage from "@/pages/Analytics";
+import ProgrammePage from "@/pages/Programme";
 import AppShell from "@/components/AppShell";
 import DemoCredentials from "@/components/DemoCredentials";
 
@@ -104,6 +106,8 @@ function ProtectedRoutes() {
         <Route path="/users" component={UsersPage} />
         <Route path="/companies" component={CompaniesPage} />
         <Route path="/reports" component={ReportsPage} />
+        <Route path="/analytics" component={AnalyticsPage} />
+        <Route path="/programme" component={ProgrammePage} />
         <Route path="/onboarding" component={OnboardingPage} />
         <Route component={NotFound} />
       </Switch>

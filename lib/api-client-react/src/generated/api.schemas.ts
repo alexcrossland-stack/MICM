@@ -447,6 +447,84 @@ export interface SuperAdminReport {
   companySummaries: CompanyReportSummary[];
 }
 
+export interface MaturityTarget {
+  id: number;
+  companyId: number;
+  domainId: number;
+  domainName: string;
+  targetScore: number;
+  /** @nullable */
+  targetDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertMaturityTargetBody {
+  /**
+   * @minimum 0
+   * @maximum 4
+   */
+  targetScore: number;
+  /** @nullable */
+  targetDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface ProgrammeKPIs {
+  participatingCompanies: number;
+  companiesWithCompletedAssessments: number;
+  /** @nullable */
+  averageMaturity?: number | null;
+  /** @nullable */
+  actionCompletionRate?: number | null;
+  /** @nullable */
+  assessmentCompletionRate?: number | null;
+  /** @nullable */
+  weakestDomain?: string | null;
+  /** @nullable */
+  strongestDomain?: string | null;
+}
+
+export interface CompanyHeatmapRow {
+  companyId: number;
+  companyName: string;
+  /** @nullable */
+  sector?: string | null;
+  /** @nullable */
+  overallScore?: number | null;
+  domainScores: DomainScore[];
+}
+
+export interface DomainBenchmark {
+  domainId: number;
+  domainName: string;
+  /** @nullable */
+  averageScore?: number | null;
+  /** @nullable */
+  minScore?: number | null;
+  /** @nullable */
+  maxScore?: number | null;
+  companiesScored: number;
+}
+
+export interface RiskCompany {
+  companyId: number;
+  companyName: string;
+  riskType: string;
+  detail: string;
+}
+
+export interface ProgrammeIntelligenceReport {
+  kpis: ProgrammeKPIs;
+  heatmap: CompanyHeatmapRow[];
+  domainBenchmarks: DomainBenchmark[];
+  riskCompanies: RiskCompany[];
+  domains: string[];
+}
+
 export type ListInvitationsParams = {
   /**
    * @nullable
@@ -518,4 +596,8 @@ export type GetCrossCompanyRadarParams = {
    * Comma-separated list of company IDs to compare
    */
   companyIds: string;
+};
+
+export type ListTargetsParams = {
+  companyId?: number;
 };

@@ -9,6 +9,8 @@ import scoresRouter from "./scores";
 import actionsRouter from "./actions";
 import domainsRouter from "./domains";
 import reportsRouter from "./reports";
+import targetsRouter from "./targets";
+import programmeRouter from "./programme";
 import demoRouter from "./demo";
 
 const router: IRouter = Router();
@@ -24,5 +26,7 @@ router.use(scoresRouter);
 router.use(actionsRouter);
 router.use(domainsRouter);
 router.use(reportsRouter);
+router.use(targetsRouter);
+router.use(programmeRouter);
 
 export default router;
