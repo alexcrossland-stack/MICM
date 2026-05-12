@@ -4,6 +4,8 @@ import { useLocation } from "wouter";
 import { ChevronDown, ChevronUp, ShieldAlert, LogIn, Loader2 } from "lucide-react";
 
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+const isDemoAuthEnabled =
+  import.meta.env.VITE_ENABLE_DEMO_AUTH === "true" && !import.meta.env.PROD;
 
 const DEMO_ACCOUNTS = [
   {
@@ -140,6 +142,8 @@ function QuickSignInButton({ role, btnColor }: { role: string; btnColor: string 
 
 export default function DemoCredentials() {
   const [open, setOpen] = useState(false);
+
+  if (!isDemoAuthEnabled) return null;
 
   return (
     <div className="w-full max-w-sm mt-3">

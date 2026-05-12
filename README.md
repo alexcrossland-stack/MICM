@@ -83,6 +83,13 @@ Required variables:
 | `BASE_PATH` | Vite dev server | `/` for root-mounted deployments |
 | `NODE_ENV` | API server | Must be `production` in live environments |
 
+Optional development-only demo variables:
+
+| Variable | Where used | Notes |
+|---|---|---|
+| `ENABLE_DEMO_AUTH` | API server | Set to `true` only for local/demo environments that need one-click demo sign-in |
+| `VITE_ENABLE_DEMO_AUTH` | Frontend (Vite) | Set to `true` only when the demo panel should be visible in non-production builds |
+
 `SESSION_SECRET` is reserved for future Express session middleware and not currently consumed by application code.
 
 **Never commit `.env` or any file containing real keys.** `.gitignore` already excludes `.local/` (Replit skills) but you should verify `.env` is also excluded if you add it.
@@ -184,6 +191,7 @@ Replit provisions and rotates Clerk keys automatically via the Auth pane. Develo
 - Development keys start with `pk_test_` / `sk_test_`
 - Production keys start with `pk_live_` / `sk_live_`
 - The "Clerk has been loaded with development keys" console warning is expected in dev — do not try to suppress it
+- Production must use the production Clerk tenant and must not enable demo auth flags
 
 ### External / GitHub Codex development
 
@@ -193,6 +201,16 @@ Create a Clerk application at [dashboard.clerk.com](https://dashboard.clerk.com)
 2. Enable **Email/Password** sign-in in the Clerk dashboard
 3. Enable **Google OAuth** if needed (requires Google OAuth credentials)
 4. Run `seed-demo-users` to create the three demo accounts in your Clerk tenant
+
+### Production Clerk setup
+
+Production deployments should use live Clerk keys from a production Clerk application:
+
+1. Set `NODE_ENV=production`
+2. Set `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` to matching `sk_live_…` / `pk_live_…` values
+3. Set `VITE_CLERK_PUBLISHABLE_KEY` to the same publishable key
+4. Keep `ENABLE_DEMO_AUTH` and `VITE_ENABLE_DEMO_AUTH` unset or `false`
+5. Configure allowed production domains and OAuth redirect URLs in Clerk
 
 ### Clerk proxy
 
@@ -240,9 +258,14 @@ Each criterion can optionally carry a `baselineDescription` (what score 0–1 lo
 
 ## Demo Mode
 
-The API exposes a `POST /api/demo/sign-in-token` endpoint that returns a short-lived Clerk sign-in token for one of three pre-seeded demo accounts. The frontend uses this for one-click login on the sign-in page.
+The API exposes a `POST /api/demo/sign-in-token` endpoint that returns a short-lived Clerk sign-in token for one of three pre-seeded demo accounts. The frontend can use this for one-click login on the sign-in page.
 
-**This endpoint is disabled in production** — it returns HTTP 404 when `NODE_ENV === "production"`.
+Demo auth is opt-in and must be enabled in both places:
+
+- Backend: `ENABLE_DEMO_AUTH=true`
+- Frontend: `VITE_ENABLE_DEMO_AUTH=true`
+
+**This endpoint is disabled in production** — it returns HTTP 404 when `NODE_ENV === "production"`, even if `ENABLE_DEMO_AUTH=true` is set accidentally. The frontend demo panel is also hidden in production builds, even if `VITE_ENABLE_DEMO_AUTH=true` is set accidentally.
 
 The demo Clerk user IDs are **hardcoded** in `artifacts/api-server/src/routes/demo.ts`. These IDs are specific to the Replit development Clerk tenant. If you are running against a different Clerk tenant (e.g. your own external Clerk application), you must:
 
@@ -343,6 +366,7 @@ On Replit, click **Deploy** in the UI. The platform builds both artifacts and se
 
 Production-specific behaviour:
 - `NODE_ENV=production` disables the demo sign-in endpoint and Replit-specific Vite plugins
+- Demo auth flags must remain unset or `false`; production builds hide the demo sign-in UI regardless
 - `VITE_CLERK_PROXY_URL` is set automatically so Clerk JS is proxied through the app domain
 - The API server binary is run directly (`node --enable-source-maps artifacts/api-server/dist/index.mjs`) without pnpm for faster startup
 - The frontend is served as static files from `artifacts/micm-platform/dist/public`

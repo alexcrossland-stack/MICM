@@ -1,5 +1,5 @@
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../app";
 
 type Row = Record<string, any>;
@@ -579,5 +579,58 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(actionSummaryResponse.body.companyId).toBe(1);
 
     expect((await request(app).get("/api/actions/summary").query({ companyId: 2 })).status).toBe(403);
+  });
+});
+
+describe("demo authentication guardrails", () => {
+  afterEach(() => {
+    delete process.env.ENABLE_DEMO_AUTH;
+    delete process.env.CLERK_SECRET_KEY;
+    process.env.NODE_ENV = "test";
+    vi.restoreAllMocks();
+  });
+
+  it("returns 404 unless demo auth is explicitly enabled outside production", async () => {
+    process.env.NODE_ENV = "development";
+    delete process.env.ENABLE_DEMO_AUTH;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const response = await request(app)
+      .post("/api/demo/sign-in-token")
+      .send({ role: "company_user" });
+
+    expect(response.status).toBe(404);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps demo sign-in disabled in production even if the flag is set", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.ENABLE_DEMO_AUTH = "true";
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const response = await request(app)
+      .post("/api/demo/sign-in-token")
+      .send({ role: "company_user" });
+
+    expect(response.status).toBe(404);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows demo sign-in tokens only when explicitly enabled outside production", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.ENABLE_DEMO_AUTH = "true";
+    process.env.CLERK_SECRET_KEY = "fake_demo_route_test_key";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ token: "demo-ticket", url: "https://clerk.example/sign-in" }),
+    } as Response);
+
+    const response = await request(app)
+      .post("/api/demo/sign-in-token")
+      .send({ role: "company_user" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ token: "demo-ticket", label: "Company User" });
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
   });
 });
