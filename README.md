@@ -31,7 +31,7 @@ Companies run structured maturity assessments across six domains, view radar/spi
 |---|---|
 | Monorepo tooling | pnpm workspaces, Node.js 24, TypeScript 5.9 |
 | API server | Express 5, `@clerk/express` auth middleware |
-| Database | PostgreSQL 16, Drizzle ORM, `drizzle-kit push` |
+| Database | PostgreSQL 16, Drizzle ORM, generated SQL migrations |
 | Validation | Zod v4, `drizzle-zod` |
 | API contract | OpenAPI 3.1 spec → Orval codegen (React Query hooks + Zod schemas) |
 | Frontend | React 19, Vite 7, Tailwind v4, Wouter routing, Recharts |
@@ -99,8 +99,8 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 # Edit .env with your DATABASE_URL, Clerk keys, etc.
 
-# 3. Push the database schema (creates all tables)
-pnpm --filter @workspace/db run push
+# 3. Apply committed database migrations (creates all tables)
+pnpm --filter @workspace/db run migrate
 
 # 4. Seed the six MICM domains (idempotent — safe to re-run)
 pnpm --filter @workspace/scripts run seed-domains
@@ -146,18 +146,21 @@ Drizzle ORM schema lives in `lib/db/src/schema/`. Tables:
 
 ### Migrations
 
-This project uses **`drizzle-kit push`** (schema push, no migration file history). There is no `migrations/` directory.
+Schema changes are promoted with generated Drizzle migrations. The migration workflow is documented in `docs/DATABASE_MIGRATIONS.md`.
 
-To apply schema changes to any environment:
+To generate a migration after editing `lib/db/src/schema/`:
 
 ```bash
-DATABASE_URL=<target_url> pnpm --filter @workspace/db run push
+pnpm --filter @workspace/db run generate
 ```
 
-> For production databases, prefer `push-force` only when you understand the destructive implications:
-> ```bash
-> DATABASE_URL=<prod_url> pnpm --filter @workspace/db run push-force
-> ```
+To apply committed migrations to a target database:
+
+```bash
+DATABASE_URL=<target_url> pnpm --filter @workspace/db run migrate
+```
+
+`push:dev` exists only for disposable local development databases while prototyping. Do not use schema push for staging or production.
 
 ### Seeding
 
@@ -281,9 +284,10 @@ These credentials are only valid against the Replit development Clerk tenant and
 │   ├── api-spec/            # OpenAPI 3.1 spec (source of truth)
 │   ├── api-client-react/    # Generated React Query hooks (do not edit)
 │   ├── api-zod/             # Generated Zod schemas (do not edit)
-│   └── db/                  # Drizzle schema, DB client, drizzle.config.ts
+│   └── db/                  # Drizzle schema, migrations, DB client, drizzle.config.ts
 ├── scripts/                 # One-off utility scripts (seed-domains, seed-demo-users)
 ├── docs/                    # Contributor guides and backlog
+│   └── DATABASE_MIGRATIONS.md # Migration workflow and review checklist
 ├── .env.example             # Environment variable reference
 ├── AGENTS.md                # Instructions for AI coding agents (Codex, Claude, etc.)
 ├── pnpm-workspace.yaml      # Workspace package discovery, catalog versions
@@ -306,8 +310,10 @@ These credentials are only valid against the Replit development Clerk tenant and
 ### Making schema changes
 
 1. Edit the relevant file in `lib/db/src/schema/`
-2. Run `pnpm --filter @workspace/db run push` to apply to your dev database
-3. Run `pnpm run typecheck` to verify the change compiles cleanly
+2. Run `pnpm --filter @workspace/db run generate`
+3. Review and commit the generated files in `lib/db/migrations/`
+4. Apply locally with `DATABASE_URL=<local_dev_url> pnpm --filter @workspace/db run migrate`
+5. Run `pnpm run typecheck` to verify the change compiles cleanly
 
 ### Typechecking
 
