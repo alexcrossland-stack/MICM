@@ -94,6 +94,7 @@ To show the staging one-click buttons:
 - Keep `NODE_ENV` outside `production`.
 
 The frontend hides the demo panel in production builds, and the API returns 404 for demo sign-in tokens when `NODE_ENV=production`.
+The frontend also checks `/api/demo/status`, so a Replit staging build can show the panel even when Vite was built in production mode, while production still stays hidden because the backend status route returns 404.
 
 ## Role Smoke Checks
 

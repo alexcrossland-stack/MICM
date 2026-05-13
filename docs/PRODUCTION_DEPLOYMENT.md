@@ -77,7 +77,7 @@ Do not reuse development Clerk keys, staging Clerk keys, or seeded demo users in
 Demo authentication is intentionally unavailable in production:
 
 - `POST /api/demo/sign-in-token` returns HTTP 404 when `NODE_ENV=production`.
-- The frontend demo panel is hidden in production builds even if `VITE_ENABLE_DEMO_AUTH=true` is accidentally set.
+- The frontend demo panel is hidden when the backend demo status route returns 404, including production.
 - Production deployment configuration should still leave `ENABLE_DEMO_AUTH` and `VITE_ENABLE_DEMO_AUTH` unset or `false`.
 
 Post-deploy guardrail check:
