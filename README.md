@@ -277,7 +277,7 @@ Criterion-level evidence notes are stored separately from score notes via `GET/P
 
 ## Demo Mode
 
-The API exposes a `POST /api/demo/sign-in-token` endpoint that returns a short-lived Clerk sign-in token for one of three pre-seeded demo accounts. The frontend can use this for one-click login on the sign-in page.
+The API exposes a `POST /api/demo/sign-in-token` endpoint that returns a short-lived Clerk sign-in token for one of three seeded staging demo accounts. The frontend can use this for one-click login on the sign-in page.
 
 Demo auth is opt-in and must be enabled in both places:
 
@@ -286,20 +286,17 @@ Demo auth is opt-in and must be enabled in both places:
 
 **This endpoint is disabled in production** — it returns HTTP 404 when `NODE_ENV === "production"`, even if `ENABLE_DEMO_AUTH=true` is set accidentally. The frontend demo panel is also hidden in production builds, even if `VITE_ENABLE_DEMO_AUTH=true` is set accidentally.
 
-The demo Clerk user IDs are **hardcoded** in `artifacts/api-server/src/routes/demo.ts`. These IDs are specific to the Replit development Clerk tenant. If you are running against a different Clerk tenant (e.g. your own external Clerk application), you must:
+The demo endpoint looks up the seeded demo records by role and email, then uses each record's `clerk_user_id` to request a short-lived Clerk sign-in token. For staging, create matching users in the staging Clerk dashboard and map the generated Clerk user IDs to the seeded DB records.
 
-1. Run `pnpm --filter @workspace/scripts run seed-demo-users` against your tenant
-2. Update the `DEMO_USERS` map in `demo.ts` with the new Clerk user IDs returned by the seed script
+Demo account records:
 
-Demo credentials (Replit dev tenant):
+| Role | Email |
+|---|---|
+| Super Admin | `superadmin.demo@micm.local` |
+| Company Admin | `companyadmin.demo@micm.local` |
+| Company User | `companyuser.demo@micm.local` |
 
-| Role | Email | Password |
-|---|---|---|
-| Super Admin | superadmin@micm-demo.com | MICMsuper1! |
-| Company Admin | companyadmin@micm-demo.com | MICMadmin1! |
-| Company User | companyuser@micm-demo.com | MICMuser1! |
-
-These credentials are only valid against the Replit development Clerk tenant and are safe to commit — they are useless outside that specific tenant.
+No demo passwords, Clerk tokens, or secrets are stored in the repository. See `docs/STAGING_DEMO_LOGIN.md` for the staging Clerk mapping steps.
 
 ---
 

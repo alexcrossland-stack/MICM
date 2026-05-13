@@ -6,23 +6,26 @@
  */
 
 import { Router, type IRouter } from "express";
+import { db, usersTable } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-// Hard-coded allowlist: only the three known demo Clerk user IDs are accepted.
-// A tester cannot escalate to any other account by guessing IDs.
-const DEMO_USERS: Record<string, { clerkId: string; label: string }> = {
+const DEMO_USERS: Record<string, { email: string; label: string; role: string }> = {
   super_admin: {
-    clerkId: "user_3DTlXz9MsUN7QBW4nYYamjVGtpa",
+    email: "superadmin.demo@micm.local",
     label: "Super Admin",
+    role: "super_admin",
   },
   company_admin: {
-    clerkId: "user_3DTlXu13Gzwq1WFbHomw76u0Dqm",
+    email: "companyadmin.demo@micm.local",
     label: "Company Admin",
+    role: "company_admin",
   },
   company_user: {
-    clerkId: "user_3DTlXx3xjPlE7QMPnyFQYm8QFe0",
+    email: "companyuser.demo@micm.local",
     label: "Company User",
+    role: "company_user",
   },
 };
 
@@ -51,6 +54,22 @@ router.post("/demo/sign-in-token", async (req: any, res): Promise<void> => {
     return;
   }
 
+  const [demoUser] = await db
+    .select()
+    .from(usersTable)
+    .where(
+      and(
+        eq(usersTable.email, demo.email),
+        eq(usersTable.role, demo.role),
+        eq(usersTable.isActive, true),
+      ),
+    );
+
+  if (!demoUser) {
+    res.status(404).json({ error: "Demo user not found. Run staging demo seed first." });
+    return;
+  }
+
   const clerkSecret = process.env["CLERK_SECRET_KEY"];
   if (!clerkSecret) {
     req.log.error("CLERK_SECRET_KEY not set — cannot create demo sign-in token");
@@ -65,7 +84,7 @@ router.post("/demo/sign-in-token", async (req: any, res): Promise<void> => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      user_id: demo.clerkId,
+      user_id: demoUser.clerkUserId,
       expires_in_seconds: 300, // 5 minutes — short window for demo use
     }),
   });
