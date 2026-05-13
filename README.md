@@ -331,6 +331,7 @@ These credentials are only valid against the Replit development Clerk tenant and
 │   ├── PRODUCTION_READINESS.md # Launch readiness gap tracker
 │   ├── MONITORING_LOGGING.md # Monitoring, alerting, and incident review runbook
 │   ├── BACKUP_RESTORE_REHEARSAL.md # Non-production backup/restore rehearsal checklist
+│   ├── PILOT_ACCEPTANCE_CHECKLIST.md # Pilot workflow acceptance and signoff template
 │   └── DATABASE_MIGRATIONS.md # Migration workflow and review checklist
 ├── .env.example             # Environment variable reference
 ├── AGENTS.md                # Instructions for AI coding agents (Codex, Claude, etc.)
