@@ -6,6 +6,7 @@ This runbook is for promoting MICM Maturity Hub from a validated staging environ
 
 - Production must run with `NODE_ENV=production`.
 - Production must use a production PostgreSQL database and a production Clerk application.
+- API startup validation requires `PORT` and `DATABASE_URL` in every environment, requires Clerk backend and publishable keys in production, and refuses demo auth when `NODE_ENV=production`.
 - Apply committed database migrations before routing user traffic to a new application version.
 - Keep demo authentication disabled in production. The backend also returns 404 for demo sign-in tokens when `NODE_ENV=production`.
 - Do not run staging/demo seed scripts against production.
