@@ -20,6 +20,21 @@ import { requireAuth } from "./auth";
 
 const router: IRouter = Router();
 
+type MissingScoreSection = {
+  userId: number | null;
+  userName: string;
+  domainId: number | null;
+  domainName: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  missingCriteriaCount: number;
+  missingCriteria: string[];
+};
+
+function formatUserName(user: any) {
+  return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || `User ${user.id}`;
+}
+
 async function buildAssessmentCycle(cycle: any) {
   const assignees = await db.select().from(assessmentAssigneesTable).where(eq(assessmentAssigneesTable.assessmentId, cycle.id));
   return {
@@ -35,6 +50,70 @@ async function buildAssessmentCycle(cycle: any) {
     createdAt: cycle.createdAt instanceof Date ? cycle.createdAt.toISOString() : cycle.createdAt,
     updatedAt: cycle.updatedAt instanceof Date ? cycle.updatedAt.toISOString() : cycle.updatedAt,
   };
+}
+
+async function getMissingScoreSections(assessmentId: number): Promise<MissingScoreSection[]> {
+  const assignees = await db.select().from(assessmentAssigneesTable).where(eq(assessmentAssigneesTable.assessmentId, assessmentId));
+  const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
+  const allCategories = await db.select().from(categoriesTable);
+  const allCriteria = await db.select().from(criteriaTable);
+  const allScores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, assessmentId));
+
+  if (assignees.length === 0) {
+    return [{
+      userId: null,
+      userName: "No assigned users",
+      domainId: null,
+      domainName: null,
+      categoryId: null,
+      categoryName: null,
+      missingCriteriaCount: allCriteria.length,
+      missingCriteria: allCriteria.map((criterion: any) => criterion.name),
+    }];
+  }
+
+  const userIds = [...new Set(assignees.map((assignee: any) => assignee.userId))];
+  const users = userIds.length > 0 ? await db.select().from(usersTable).where(inArray(usersTable.id, userIds)) : [];
+  const userById = new Map(users.map((user: any) => [user.id, user]));
+  const domainById = new Map(allDomains.map((domain: any) => [domain.id, domain]));
+  const categoriesById = new Map(allCategories.map((category: any) => [category.id, category]));
+  const criteriaByCategoryId = new Map<number, any[]>();
+
+  for (const criterion of allCriteria) {
+    const group = criteriaByCategoryId.get(criterion.categoryId) ?? [];
+    group.push(criterion);
+    criteriaByCategoryId.set(criterion.categoryId, group);
+  }
+
+  const missingSections: MissingScoreSection[] = [];
+  for (const assignee of assignees) {
+    const user = userById.get(assignee.userId);
+    const scoredCriteria = new Set(
+      allScores
+        .filter((score: any) => score.userId === assignee.userId)
+        .map((score: any) => score.criterionId),
+    );
+
+    for (const category of allCategories) {
+      const categoryCriteria = criteriaByCategoryId.get(category.id) ?? [];
+      const missingCriteria = categoryCriteria.filter((criterion: any) => !scoredCriteria.has(criterion.id));
+      if (missingCriteria.length === 0) continue;
+
+      const domain = domainById.get(category.domainId);
+      missingSections.push({
+        userId: assignee.userId,
+        userName: user ? formatUserName(user) : `User ${assignee.userId}`,
+        domainId: domain?.id ?? null,
+        domainName: domain?.name ?? null,
+        categoryId: category.id,
+        categoryName: category.name,
+        missingCriteriaCount: missingCriteria.length,
+        missingCriteria: missingCriteria.map((criterion: any) => criterion.name),
+      });
+    }
+  }
+
+  return missingSections;
 }
 
 // GET /assessments
@@ -122,6 +201,17 @@ router.patch("/assessments/:id", requireAuth, async (req: any, res): Promise<voi
   if (currentUser.role === "company_admin" && currentUser.companyId !== existingCycle.companyId) {
     res.status(403).json({ error: "Forbidden" });
     return;
+  }
+
+  if (parsed.data.status === "completed") {
+    const missingSections = await getMissingScoreSections(params.data.id);
+    if (missingSections.length > 0) {
+      res.status(400).json({
+        error: "Assessment cannot be completed while required scores are missing.",
+        missingSections,
+      });
+      return;
+    }
   }
 
   const updates: any = {};

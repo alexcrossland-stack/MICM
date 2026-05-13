@@ -1254,6 +1254,8 @@ components:
           type: integer
         score:
           type: integer
+          minimum: 0
+          maximum: 4
         notes:
           type: ["string", "null"]
         createdAt:
@@ -1289,6 +1291,8 @@ components:
           type: integer
         score:
           type: integer
+          minimum: 0
+          maximum: 4
         notes:
           type: ["string", "null"]
       required:

@@ -267,6 +267,10 @@ export interface Score {
   assessmentId: number;
   userId: number;
   criterionId: number;
+  /**
+   * @minimum 0
+   * @maximum 4
+   */
   score: number;
   /** @nullable */
   notes?: string | null;
@@ -276,6 +280,10 @@ export interface Score {
 
 export interface ScoreInput {
   criterionId: number;
+  /**
+   * @minimum 0
+   * @maximum 4
+   */
   score: number;
   /** @nullable */
   notes?: string | null;

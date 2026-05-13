@@ -8,10 +8,12 @@ import {
   useListCompanyUsers,
   useGetRadarData,
   useListDomains,
+  useListScores,
   useListCriterionNotes,
   useCreateCriterionNote,
   type CriterionNote,
   type Domain,
+  type Score,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,15 @@ type CriterionOption = {
   domainName: string;
 };
 
+type MissingScoreSection = {
+  userId: number | null;
+  userName: string;
+  domainName: string | null;
+  categoryName: string | null;
+  missingCriteriaCount: number;
+  missingCriteria: string[];
+};
+
 function buildCriterionOptions(domains: Domain[] | undefined): CriterionOption[] {
   return (domains ?? []).flatMap((domain) =>
     domain.categories.flatMap((category) =>
@@ -60,6 +71,59 @@ function formatNoteDate(value: string) {
   });
 }
 
+function buildMissingScoreSections(
+  assignedUserIds: number[] | undefined,
+  users: any[] | undefined,
+  domains: Domain[] | undefined,
+  scores: Score[] | undefined,
+): MissingScoreSection[] {
+  const allCriteria = (domains ?? []).flatMap((domain) =>
+    domain.categories.flatMap((category) =>
+      category.criteria.map((criterion) => ({ ...criterion, categoryName: category.name, domainName: domain.name })),
+    ),
+  );
+  const assignees = assignedUserIds ?? [];
+
+  if (assignees.length === 0) {
+    return [{
+      userId: null,
+      userName: "No assigned users",
+      domainName: null,
+      categoryName: null,
+      missingCriteriaCount: allCriteria.length,
+      missingCriteria: allCriteria.map((criterion) => criterion.name),
+    }];
+  }
+
+  const userById = new Map((users ?? []).map((user) => [user.id, user]));
+  const scoresByUserId = new Map<number, Set<number>>();
+  for (const score of scores ?? []) {
+    const userScores = scoresByUserId.get(score.userId) ?? new Set<number>();
+    userScores.add(score.criterionId);
+    scoresByUserId.set(score.userId, userScores);
+  }
+
+  return assignees.flatMap((userId) => {
+    const user = userById.get(userId);
+    const userName = user ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email : `User ${userId}`;
+    const scoredCriteria = scoresByUserId.get(userId) ?? new Set<number>();
+    return (domains ?? []).flatMap((domain) =>
+      domain.categories.flatMap((category) => {
+        const missingCriteria = category.criteria.filter((criterion) => !scoredCriteria.has(criterion.id));
+        if (missingCriteria.length === 0) return [];
+        return [{
+          userId,
+          userName,
+          domainName: domain.name,
+          categoryName: category.name,
+          missingCriteriaCount: missingCriteria.length,
+          missingCriteria: missingCriteria.map((criterion) => criterion.name),
+        }];
+      }),
+    );
+  });
+}
+
 export default function AssessmentDetailPage() {
   const [, params] = useRoute("/assessments/:id");
   const id = Number(params?.id);
@@ -72,6 +136,8 @@ export default function AssessmentDetailPage() {
   const [selectedCriterionId, setSelectedCriterionId] = useState("");
   const [noteText, setNoteText] = useState("");
   const [noteStatus, setNoteStatus] = useState<string | null>(null);
+  const [completionMessage, setCompletionMessage] = useState<string | null>(null);
+  const [apiMissingScoreSections, setApiMissingScoreSections] = useState<MissingScoreSection[]>([]);
 
   const { data: assessment, isLoading } = useGetAssessment(id);
   const { data: results } = useGetAssessmentResults(id);
@@ -85,6 +151,10 @@ export default function AssessmentDetailPage() {
   const { data: domains, isLoading: domainsLoading } = useListDomains({
     query: { enabled: canUseEvidenceNotes } as any,
   });
+  const { data: scores, isLoading: scoresLoading } = useListScores(
+    { assessmentId: id },
+    { query: { enabled: !!id && canManage && assessment?.status === "active" } as any },
+  );
   const {
     data: criterionNotes,
     isLoading: notesLoading,
@@ -103,6 +173,11 @@ export default function AssessmentDetailPage() {
   const sortedCriterionNotes = [...(criterionNotes ?? [])].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
+  const missingScoreSections = canManage
+    ? buildMissingScoreSections(assessment.assignedUserIds, users, domains, scores)
+    : [];
+  const displayedMissingScoreSections = apiMissingScoreSections.length > 0 ? apiMissingScoreSections : missingScoreSections;
+  const canMarkComplete = !scoresLoading && !domainsLoading && displayedMissingScoreSections.length === 0;
 
   const radarChartData = radarData ? radarData.domains.map((name: string, i: number) => {
     const point: any = { domain: name };
@@ -111,13 +186,24 @@ export default function AssessmentDetailPage() {
   }) : [];
 
   async function handleStatusChange(status: string) {
+    setCompletionMessage(null);
+    setApiMissingScoreSections([]);
+    if (status === "completed" && !canMarkComplete) {
+      setCompletionMessage("This assessment still has missing required scores.");
+      return;
+    }
     setStatusUpdating(true);
     try {
       await updateAssessment({ id, data: { status } });
       qc.invalidateQueries();
       toast({ title: `Assessment ${status}` });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      const missingSections = e?.response?.data?.missingSections;
+      if (Array.isArray(missingSections)) {
+        setApiMissingScoreSections(missingSections);
+        setCompletionMessage(e.response.data.error ?? "This assessment still has missing required scores.");
+      }
+      toast({ title: "Error", description: e?.response?.data?.error ?? e.message, variant: "destructive" });
     } finally {
       setStatusUpdating(false);
     }
@@ -182,8 +268,8 @@ export default function AssessmentDetailPage() {
           </Button>
         )}
         {canManage && assessment.status === "active" && (
-          <Button size="sm" variant="outline" onClick={() => handleStatusChange("completed")} disabled={statusUpdating}>
-            Mark Completed
+          <Button size="sm" variant="outline" onClick={() => handleStatusChange("completed")} disabled={statusUpdating || !canMarkComplete}>
+            {scoresLoading || domainsLoading ? "Checking scores" : "Mark Completed"}
           </Button>
         )}
         {canManage && (
@@ -197,6 +283,37 @@ export default function AssessmentDetailPage() {
           </Link>
         )}
       </div>
+
+      {canManage && assessment.status === "active" && displayedMissingScoreSections.length > 0 && (
+        <Card className="border-card-border border-yellow-200 bg-yellow-50/60 dark:border-yellow-900/60 dark:bg-yellow-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-yellow-700 dark:text-yellow-400" />
+              Incomplete sections
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Required scores are missing. Complete the sections below before marking this assessment completed.
+            </p>
+            {completionMessage && <p className="text-sm text-yellow-800 dark:text-yellow-300">{completionMessage}</p>}
+            <div className="space-y-1.5">
+              {displayedMissingScoreSections.slice(0, 8).map((section, index) => (
+                <div key={`${section.userId ?? "none"}-${section.domainName ?? "none"}-${section.categoryName ?? "none"}-${index}`} className="rounded-md border border-yellow-200 bg-background/70 px-3 py-2 text-sm dark:border-yellow-900/60">
+                  <span className="font-medium">{section.userName}</span>
+                  {section.domainName && section.categoryName ? ` · ${section.domainName} / ${section.categoryName}` : ""}
+                  <span className="text-muted-foreground"> · {section.missingCriteriaCount} missing</span>
+                </div>
+              ))}
+              {displayedMissingScoreSections.length > 8 && (
+                <p className="text-xs text-muted-foreground">
+                  {displayedMissingScoreSections.length - 8} more incomplete section{displayedMissingScoreSections.length - 8 === 1 ? "" : "s"}.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Assignees */}
       <Card className="border-card-border">
