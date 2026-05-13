@@ -65,4 +65,6 @@ Re-running the script replaces the prior `MICM STAGING DEMO - ...` companies and
 
 The seeded users are database records only. To sign in as these users, a matching Clerk development or staging user would need to exist with the same external user ID mapping. Creating Clerk users, passwords, or sign-in tokens for this richer dataset is intentionally out of scope for the seed script.
 
+See `docs/STAGING_DEMO_LOGIN.md` for the staging Clerk setup and role smoke-test steps.
+
 The demo sign-in endpoint remains blocked when `NODE_ENV=production`, even if `ENABLE_DEMO_AUTH=true` is set accidentally.
