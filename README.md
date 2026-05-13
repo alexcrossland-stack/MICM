@@ -328,6 +328,7 @@ These credentials are only valid against the Replit development Clerk tenant and
 ├── scripts/                 # One-off utility scripts (seed-domains, seed-demo-users, seed-staging-demo-data)
 ├── docs/                    # Contributor guides and backlog
 │   ├── PRODUCTION_DEPLOYMENT.md # Production deployment and smoke-test runbook
+│   ├── PRODUCTION_READINESS.md # Launch readiness gap tracker
 │   └── DATABASE_MIGRATIONS.md # Migration workflow and review checklist
 ├── .env.example             # Environment variable reference
 ├── AGENTS.md                # Instructions for AI coding agents (Codex, Claude, etc.)
@@ -380,7 +381,7 @@ pnpm --filter @workspace/api-spec run codegen
 
 ## Production Deployment
 
-For the full deployment runbook, required environment variables, production migration process, Clerk setup, post-deploy smoke checklist, rollback checklist, and staging-to-production promotion checklist, see `docs/PRODUCTION_DEPLOYMENT.md`.
+For the full deployment runbook, required environment variables, production migration process, Clerk setup, post-deploy smoke checklist, rollback checklist, and staging-to-production promotion checklist, see `docs/PRODUCTION_DEPLOYMENT.md`. For launch readiness tracking across security, data protection, hosting, monitoring, backup/restore, pilot acceptance, onboarding, support, and go/no-go criteria, see `docs/PRODUCTION_READINESS.md`.
 
 On Replit, click **Deploy** in the UI. The platform builds both artifacts and serves them via the shared proxy.
 
