@@ -793,6 +793,35 @@ describe("dashboard, report, and analytics smoke coverage", () => {
 
     expect((await request(app).get("/api/actions/summary").query({ companyId: 2 })).status).toBe(403);
   });
+
+  it("keeps Programme Intelligence restricted to Super Admins and returns filter metadata", async () => {
+    signInAs("clerk-admin-a");
+    expect((await request(app).get("/api/reports/programme")).status).toBe(403);
+
+    signInAs("clerk-user-a");
+    expect((await request(app).get("/api/reports/programme")).status).toBe(403);
+
+    signInAs("clerk-super");
+    const response = await request(app).get("/api/reports/programme");
+
+    expect(response.status).toBe(200);
+    expect(response.body.heatmap).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        companyId: 1,
+        companyName: "Acme Precision",
+        sector: "Manufacturing",
+        size: "51-200",
+        latestCompletedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      expect.objectContaining({
+        companyId: 2,
+        companyName: "Beta Fabrication",
+        sector: "Manufacturing",
+        size: "11-50",
+        latestCompletedAt: "2026-01-01T00:00:00.000Z",
+      }),
+    ]));
+  });
 });
 
 describe("demo authentication guardrails", () => {

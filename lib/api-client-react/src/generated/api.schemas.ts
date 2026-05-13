@@ -523,6 +523,10 @@ export interface CompanyHeatmapRow {
   /** @nullable */
   sector?: string | null;
   /** @nullable */
+  size?: string | null;
+  /** @nullable */
+  latestCompletedAt?: string | null;
+  /** @nullable */
   overallScore?: number | null;
   domainScores: DomainScore[];
 }

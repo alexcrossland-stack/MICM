@@ -1741,6 +1741,11 @@ components:
           type: string
         sector:
           type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        latestCompletedAt:
+          type: ["string", "null"]
+          format: date-time
         overallScore:
           type: ["number", "null"]
         domainScores:

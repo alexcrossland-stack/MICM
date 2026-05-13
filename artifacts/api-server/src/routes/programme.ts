@@ -93,12 +93,14 @@ router.get("/reports/programme", requireAuth, async (req: any, res): Promise<voi
 
     let domainScores: any[] = allDomains.map((d) => ({ domainId: d.id, domainName: d.name, score: null, band: null }));
     let overallScore: number | null = null;
+    let latestCompletedAt: string | null = null;
 
     if (completed.length > 0) {
       companiesWithCompletedAssessments++;
       const latestCycle = completed.sort(
         (a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       )[0];
+      latestCompletedAt = latestCycle.updatedAt ? new Date(latestCycle.updatedAt).toISOString() : null;
 
       domainScores = await getDomainScoresForCycle(latestCycle.id, allDomains, allCategories, allCriteria);
 
@@ -130,6 +132,8 @@ router.get("/reports/programme", requireAuth, async (req: any, res): Promise<voi
       companyId: company.id,
       companyName: company.name,
       sector: company.sector ?? null,
+      size: company.size ?? null,
+      latestCompletedAt,
       overallScore,
       domainScores,
     });

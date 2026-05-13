@@ -972,6 +972,8 @@ export const GetProgrammeIntelligenceResponse = zod.object({
       companyId: zod.number(),
       companyName: zod.string(),
       sector: zod.string().nullish(),
+      size: zod.string().nullish(),
+      latestCompletedAt: zod.coerce.date().nullish(),
       overallScore: zod.number().nullish(),
       domainScores: zod.array(
         zod.object({
