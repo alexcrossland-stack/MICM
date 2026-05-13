@@ -504,6 +504,11 @@ describe("assessment lifecycle", () => {
     expect(activateResponse.body.status).toBe("active");
 
     signInAs("clerk-user-a");
+    const invalidScoreResponse = await request(app)
+      .post("/api/scores")
+      .send({ assessmentId, scores: [{ criterionId: 1, score: 5, notes: "Invalid" }] });
+    expect(invalidScoreResponse.status).toBe(400);
+
     const partialScoreResponse = await request(app)
       .post("/api/scores")
       .send({ assessmentId, scores: [{ criterionId: 1, score: 2, notes: "Partial" }] });
@@ -512,6 +517,16 @@ describe("assessment lifecycle", () => {
     const afterPartial = await request(app).get(`/api/assessments/${assessmentId}`);
     expect(afterPartial.body.completedUserIds).toEqual([]);
 
+    signInAs("clerk-admin-a");
+    const incompleteCompleteResponse = await request(app).patch(`/api/assessments/${assessmentId}`).send({ status: "completed" });
+    expect(incompleteCompleteResponse.status).toBe(400);
+    expect(incompleteCompleteResponse.body.error).toContain("required scores");
+    expect(incompleteCompleteResponse.body.missingSections.map((section: any) => `${section.domainName}/${section.categoryName}`)).toEqual([
+      "Strategy/Planning",
+      "Operations/Execution",
+    ]);
+
+    signInAs("clerk-user-a");
     const fullScoreResponse = await request(app).post("/api/scores").send({
       assessmentId,
       scores: [

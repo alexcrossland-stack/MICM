@@ -424,12 +424,18 @@ export const ListScoresQueryParams = zod.object({
   userId: zod.coerce.number().nullish(),
 });
 
+export const listScoresResponseScoreMin = 0;
+export const listScoresResponseScoreMax = 4;
+
 export const ListScoresResponseItem = zod.object({
   id: zod.number(),
   assessmentId: zod.number(),
   userId: zod.number(),
   criterionId: zod.number(),
-  score: zod.number(),
+  score: zod
+    .number()
+    .min(listScoresResponseScoreMin)
+    .max(listScoresResponseScoreMax),
   notes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -439,23 +445,35 @@ export const ListScoresResponse = zod.array(ListScoresResponseItem);
 /**
  * @summary Submit/upsert scores for an assessment
  */
+export const submitScoresBodyScoresItemScoreMin = 0;
+export const submitScoresBodyScoresItemScoreMax = 4;
+
 export const SubmitScoresBody = zod.object({
   assessmentId: zod.number(),
   scores: zod.array(
     zod.object({
       criterionId: zod.number(),
-      score: zod.number(),
+      score: zod
+        .number()
+        .min(submitScoresBodyScoresItemScoreMin)
+        .max(submitScoresBodyScoresItemScoreMax),
       notes: zod.string().nullish(),
     }),
   ),
 });
+
+export const submitScoresResponseScoreMin = 0;
+export const submitScoresResponseScoreMax = 4;
 
 export const SubmitScoresResponseItem = zod.object({
   id: zod.number(),
   assessmentId: zod.number(),
   userId: zod.number(),
   criterionId: zod.number(),
-  score: zod.number(),
+  score: zod
+    .number()
+    .min(submitScoresResponseScoreMin)
+    .max(submitScoresResponseScoreMax),
   notes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),

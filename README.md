@@ -254,6 +254,8 @@ Domain scores displayed in radar charts are the **arithmetic mean** of all crite
 
 Each criterion can optionally carry a `baselineDescription` (what score 0–1 looks like in practice) and an `excellenceDescription` (what score 3–4 looks like). These are seeded per-criterion and shown in the TakeAssessment UI.
 
+Assessments cannot be marked `completed` until every assigned user has submitted a 0–4 score for every criterion. The assessment review page shows the remaining incomplete domains/categories before completion.
+
 Criterion-level evidence notes are stored separately from score notes via `GET/POST /api/assessment-criterion-notes`. Notes are tenant-scoped to the assessment company, linked to the assessment, criterion, author, and timestamps, and are included in assessment results plus report composition context. File uploads and external evidence storage are not part of the current implementation.
 
 ---
