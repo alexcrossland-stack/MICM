@@ -27,6 +27,12 @@ cat lib/api-zod/src/index.ts
 
 The initial automated suite uses **Vitest** and **Supertest**. It covers safety-critical API behavior with mocked Clerk auth and an in-memory DB test double, so it does not require real Clerk keys, a PostgreSQL database, secrets, or production data.
 
+Frontend smoke coverage is also included in Vitest. It renders key pages with mocked auth/API data to check route-level UI, role visibility, exports, Programme access, assessment review, and evidence notes without a browser, Clerk tenant, database, or production data. Run only those smoke tests with:
+
+```bash
+pnpm run test:frontend-smoke
+```
+
 ---
 
 ## Manual Smoke Test Checklist
