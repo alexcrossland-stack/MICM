@@ -329,6 +329,7 @@ These credentials are only valid against the Replit development Clerk tenant and
 ├── docs/                    # Contributor guides and backlog
 │   ├── PRODUCTION_DEPLOYMENT.md # Production deployment and smoke-test runbook
 │   ├── PRODUCTION_READINESS.md # Launch readiness gap tracker
+│   ├── PILOT_ACCEPTANCE_CHECKLIST.md # Pilot workflow acceptance and signoff template
 │   └── DATABASE_MIGRATIONS.md # Migration workflow and review checklist
 ├── .env.example             # Environment variable reference
 ├── AGENTS.md                # Instructions for AI coding agents (Codex, Claude, etc.)
