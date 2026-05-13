@@ -602,6 +602,7 @@ export type GetCompanyReportExportFormat =
 export const GetCompanyReportExportFormat = {
   csv: "csv",
   pdf: "pdf",
+  xlsx: "xlsx",
 } as const;
 
 export type GetCompanyReportExportTemplate =

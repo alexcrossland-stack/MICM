@@ -43,6 +43,7 @@ const REPORT_TEMPLATE_OPTIONS: Array<{ value: ReportTemplate; label: string }> =
 const REPORT_FORMAT_OPTIONS: Array<{ value: ReportExportFormat; label: string }> = [
   { value: GetCompanyReportExportFormat.csv, label: "CSV" },
   { value: GetCompanyReportExportFormat.pdf, label: "PDF" },
+  { value: GetCompanyReportExportFormat.xlsx, label: "Excel" },
 ];
 
 function filenameFromDisposition(disposition: string | null, fallback: string) {
