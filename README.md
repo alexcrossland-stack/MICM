@@ -284,7 +284,7 @@ Demo auth is opt-in and must be enabled in both places:
 - Backend: `ENABLE_DEMO_AUTH=true`
 - Frontend: `VITE_ENABLE_DEMO_AUTH=true`
 
-**This endpoint is disabled in production** — it returns HTTP 404 when `NODE_ENV === "production"`, even if `ENABLE_DEMO_AUTH=true` is set accidentally. The frontend demo panel is also hidden in production builds, even if `VITE_ENABLE_DEMO_AUTH=true` is set accidentally.
+**This endpoint is disabled in production** — it returns HTTP 404 when `NODE_ENV === "production"`, even if `ENABLE_DEMO_AUTH=true` is set accidentally. The frontend only shows the demo panel when `VITE_ENABLE_DEMO_AUTH=true` and the backend confirms demo auth is enabled.
 
 The demo endpoint looks up the seeded demo records by role and email, then uses each record's `clerk_user_id` to request a short-lived Clerk sign-in token. For staging, create matching users in the staging Clerk dashboard and map the generated Clerk user IDs to the seeded DB records.
 

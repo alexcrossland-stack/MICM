@@ -33,6 +33,19 @@ function isDemoAuthEnabled() {
   return process.env["NODE_ENV"] !== "production" && process.env["ENABLE_DEMO_AUTH"] === "true";
 }
 
+router.get("/demo/status", (_req, res): void => {
+  if (!isDemoAuthEnabled()) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  res.json({
+    enabled: true,
+    label: "Development / Staging Demo Access",
+    roles: Object.keys(DEMO_USERS),
+  });
+});
+
 // POST /api/demo/sign-in-token
 // Returns a short-lived Clerk sign-in token for a demo account.
 // The client redirects to /sign-in?__clerk_ticket=<token> and Clerk's

@@ -129,8 +129,9 @@ Complete the following against a running local or staging environment with all t
 - [ ] Confirm `POST /api/demo/sign-in-token` returns 404 when `ENABLE_DEMO_AUTH` is unset or false
 - [ ] Confirm `POST /api/demo/sign-in-token` returns 200 in development only when `ENABLE_DEMO_AUTH=true`
 - [ ] Confirm `POST /api/demo/sign-in-token` returns 404 when `NODE_ENV=production`
-- [ ] Confirm the demo credentials panel is visible only in non-production builds when `VITE_ENABLE_DEMO_AUTH=true`
-- [ ] Confirm the demo credentials panel is not visible in production builds
+- [ ] Confirm `GET /api/demo/status` returns 200 only when demo auth is enabled outside production
+- [ ] Confirm the demo credentials panel is visible only when `VITE_ENABLE_DEMO_AUTH=true` and `/api/demo/status` returns 200
+- [ ] Confirm the demo credentials panel is not visible when `/api/demo/status` returns 404
 
 ---
 

@@ -996,6 +996,8 @@ describe("demo authentication guardrails", () => {
     delete process.env.ENABLE_DEMO_AUTH;
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
+    expect((await request(app).get("/api/demo/status")).status).toBe(404);
+
     const response = await request(app)
       .post("/api/demo/sign-in-token")
       .send({ role: "company_user" });
@@ -1008,6 +1010,8 @@ describe("demo authentication guardrails", () => {
     process.env.NODE_ENV = "production";
     process.env.ENABLE_DEMO_AUTH = "true";
     const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    expect((await request(app).get("/api/demo/status")).status).toBe(404);
 
     const response = await request(app)
       .post("/api/demo/sign-in-token")
@@ -1037,6 +1041,14 @@ describe("demo authentication guardrails", () => {
       ok: true,
       json: async () => ({ token: "demo-ticket", url: "https://clerk.example/sign-in" }),
     } as Response);
+
+    const statusResponse = await request(app).get("/api/demo/status");
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.body).toEqual({
+      enabled: true,
+      label: "Development / Staging Demo Access",
+      roles: ["super_admin", "company_admin", "company_user"],
+    });
 
     const response = await request(app)
       .post("/api/demo/sign-in-token")
