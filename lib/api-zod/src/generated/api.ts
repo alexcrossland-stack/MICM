@@ -11,7 +11,13 @@ import * as zod from "zod";
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
-  status: zod.string(),
+  status: zod.enum(["ok", "degraded"]),
+  checkedAt: zod.string(),
+  version: zod.string().nullish(),
+  commit: zod.string().nullish(),
+  database: zod.object({
+    status: zod.enum(["ok", "degraded"]),
+  }),
 });
 
 /**

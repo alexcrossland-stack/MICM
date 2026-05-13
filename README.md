@@ -329,6 +329,7 @@ These credentials are only valid against the Replit development Clerk tenant and
 ├── docs/                    # Contributor guides and backlog
 │   ├── PRODUCTION_DEPLOYMENT.md # Production deployment and smoke-test runbook
 │   ├── PRODUCTION_READINESS.md # Launch readiness gap tracker
+│   ├── MONITORING_LOGGING.md # Monitoring, alerting, and incident review runbook
 │   ├── BACKUP_RESTORE_REHEARSAL.md # Non-production backup/restore rehearsal checklist
 │   └── DATABASE_MIGRATIONS.md # Migration workflow and review checklist
 ├── .env.example             # Environment variable reference
