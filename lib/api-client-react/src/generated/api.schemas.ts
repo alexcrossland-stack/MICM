@@ -5,8 +5,34 @@
  * MICM Manufacturing Maturity Assessment Platform API
  * OpenAPI spec version: 0.1.0
  */
+export type HealthStatusStatus =
+  (typeof HealthStatusStatus)[keyof typeof HealthStatusStatus];
+
+export const HealthStatusStatus = {
+  ok: "ok",
+  degraded: "degraded",
+} as const;
+
+export type HealthStatusDatabaseStatus =
+  (typeof HealthStatusDatabaseStatus)[keyof typeof HealthStatusDatabaseStatus];
+
+export const HealthStatusDatabaseStatus = {
+  ok: "ok",
+  degraded: "degraded",
+} as const;
+
+export type HealthStatusDatabase = {
+  status: HealthStatusDatabaseStatus;
+};
+
 export interface HealthStatus {
-  status: string;
+  status: HealthStatusStatus;
+  checkedAt: string;
+  /** @nullable */
+  version?: string | null;
+  /** @nullable */
+  commit?: string | null;
+  database: HealthStatusDatabase;
 }
 
 export type AuditLogMetadata = { [key: string]: unknown };
