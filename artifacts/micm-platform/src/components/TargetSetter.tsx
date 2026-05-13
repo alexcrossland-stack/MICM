@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Target, Save, Loader2 } from "lucide-react";
+import { formatTargetDate, getTargetPlanningStatus } from "@/lib/targetPlanning";
+import { CalendarDays, Target, Save, Loader2, TrendingUp } from "lucide-react";
 
 interface TargetRow {
   domainId: number;
@@ -19,9 +20,11 @@ interface TargetRow {
 export function TargetSetter({
   companyId,
   currentScoreByDomainId,
+  currentScoreByDomainName,
 }: {
   companyId: number;
   currentScoreByDomainId?: Record<number, number | null>;
+  currentScoreByDomainName?: Record<string, number | null>;
 }) {
   const { toast } = useToast();
   const { data: domains } = useListDomains();
@@ -114,30 +117,50 @@ export function TargetSetter({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Target className="w-4 h-4" />
-        <span>Set target maturity scores for each domain (0–4 scale). Changes save per domain.</span>
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+          <Target className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>Set the maturity level each domain should reach on the 0–4 scale.</span>
+        </div>
+        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+          <TrendingUp className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>Gap and focus level use the latest completed assessment.</span>
+        </div>
+        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+          <CalendarDays className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>Target dates show when each improvement window closes.</span>
+        </div>
       </div>
 
       <div className="overflow-x-auto -mx-1">
-        <table className="w-full text-sm min-w-[600px]">
+        <table className="w-full text-sm min-w-[820px]">
           <thead>
             <tr className="border-b border-border">
               <th className="text-left py-2 px-2 font-medium text-muted-foreground text-xs w-44">Domain</th>
               <th className="text-center py-2 px-2 font-medium text-muted-foreground text-xs w-24">Current</th>
               <th className="text-center py-2 px-2 font-medium text-muted-foreground text-xs w-28">Target (0–4)</th>
-              <th className="text-center py-2 px-2 font-medium text-muted-foreground text-xs w-36">Target Date</th>
+              <th className="text-left py-2 px-2 font-medium text-muted-foreground text-xs w-32">Gap / Focus</th>
+              <th className="text-left py-2 px-2 font-medium text-muted-foreground text-xs w-40">Target Date</th>
               <th className="text-left py-2 px-2 font-medium text-muted-foreground text-xs">Notes</th>
               <th className="w-16" />
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
-              const current = currentScoreByDomainId?.[row.domainId] ?? null;
+              const current = currentScoreByDomainId?.[row.domainId] ?? currentScoreByDomainName?.[row.domainName] ?? null;
               const targetVal = parseFloat(row.targetScore);
               const targetValid = !isNaN(targetVal) && targetVal >= 0 && targetVal <= 4;
               const isSaving = saving[row.domainId];
+              const status = getTargetPlanningStatus(current, targetValid ? targetVal : null);
+              const statusColor =
+                status.tone === "success"
+                  ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-300"
+                  : status.tone === "warning"
+                    ? "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300"
+                    : status.tone === "danger"
+                      ? "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300"
+                      : "";
 
               return (
                 <tr key={row.domainId} className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors">
@@ -166,12 +189,21 @@ export function TargetSetter({
                     />
                   </td>
                   <td className="py-2.5 px-2">
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="outline" className={`w-fit text-xs ${statusColor}`}>
+                        {status.priorityLabel}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{status.label}</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-2">
                     <Input
                       type="date"
                       value={row.targetDate}
                       onChange={(e) => updateRow(row.domainId, "targetDate", e.target.value)}
                       className="h-8 text-xs w-full"
                     />
+                    <p className="mt-1 text-xs text-muted-foreground">{formatTargetDate(row.targetDate)}</p>
                   </td>
                   <td className="py-2.5 px-2">
                     <Input
