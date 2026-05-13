@@ -739,10 +739,27 @@ describe("dashboard, report, and analytics smoke coverage", () => {
 
     const pdfExportResponse = await request(app)
       .get("/api/reports/company/2/export")
-      .query({ format: "pdf", template: "board_ready" });
+      .query({ format: "pdf", template: "board_ready" })
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
     expect(pdfExportResponse.status).toBe(200);
     expect(pdfExportResponse.headers["content-type"]).toContain("application/pdf");
     expect(pdfExportResponse.headers["content-disposition"]).toContain("beta-fabrication-board-ready-report.pdf");
+    const pdfText = pdfExportResponse.body.toString("utf8");
+    expect(pdfText).toContain("%PDF-1.4");
+    expect(pdfText).toContain("MICM Maturity Hub");
+    expect(pdfText).toContain("Executive summary");
+    expect(pdfText).toContain("Maturity overview");
+    expect(pdfText).toContain("Domain findings");
+    expect(pdfText).toContain("Action roadmap");
+    expect(pdfText).toContain("Evidence notes");
+    expect(pdfText).toContain("Beta evidence note");
+    expect(pdfText).toContain("Benchmarking");
+    expect(pdfText).toContain("Super Admin benchmarking context");
 
     signInAs("clerk-admin-a");
     expect((await request(app).get("/api/reports/superadmin")).status).toBe(403);
