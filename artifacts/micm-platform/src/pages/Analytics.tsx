@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { ScoreBandText, CHART_COLORS, OverlayRadarAndTable } from "@/components/RadarOverlay";
 import { TargetSetter } from "@/components/TargetSetter";
+import { formatTargetDate, getTargetPlanningStatus } from "@/lib/targetPlanning";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   not_started: { label: "Not Started", color: "#94a3b8", icon: Clock },
@@ -199,6 +200,14 @@ export default function AnalyticsPage() {
   const currentScoreByDomainId: Record<number, number | null> = Object.fromEntries(
     (targets ?? []).map((t) => [t.domainId, domainScoreByDomainName[t.domainName] ?? null]),
   );
+  const targetSummaries = (targets ?? []).map((target) => {
+    const current = domainScoreByDomainName[target.domainName] ?? null;
+    const status = getTargetPlanningStatus(current, target.targetScore);
+    return { target, current, status };
+  });
+  const highFocusTargets = targetSummaries.filter((item) => item.status.priority === "high_gap");
+  const metTargets = targetSummaries.filter((item) => item.status.priority === "on_track");
+  const datedTargets = targetSummaries.filter((item) => item.target.targetDate);
 
   return (
     <div className="space-y-6">
@@ -413,10 +422,12 @@ export default function AnalyticsPage() {
                   <BarChart
                     data={radarData.domains.map((d, i) => {
                       const t = targets.find((t) => t.domainName === d);
+                      const current = radarData.series[0]?.scores[i] ?? null;
                       return {
                         domain: d.split(" ").slice(0, 2).join(" "),
-                        current: radarData.series[0]?.scores[i] ?? null,
+                        current,
                         target: t?.targetScore ?? null,
+                        gap: t?.targetScore != null && current != null ? Number((t.targetScore - current).toFixed(1)) : null,
                       };
                     })}
                   >
@@ -429,6 +440,19 @@ export default function AnalyticsPage() {
                     <Bar dataKey="target" name="Target" fill="#a78bfa" radius={[3, 3, 0, 0]} fillOpacity={0.6} />
                   </BarChart>
                 </ResponsiveContainer>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {targetSummaries.slice(0, 6).map(({ target, current, status }) => (
+                    <div key={target.id} className="rounded-md border border-border/60 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground truncate">{target.domainName}</span>
+                        <Badge variant="outline" className="text-xs shrink-0">{status.priorityLabel}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {current == null ? "No current score" : `Current ${current.toFixed(1)}`} - Target {target.targetScore.toFixed(1)} - {status.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -570,20 +594,92 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-card-border">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Target className="w-4 h-4" />
-                  Maturity Targets
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Set target scores for each domain. Targets appear as an overlay on the radar chart.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <TargetSetter companyId={targetCompanyId} currentScoreByDomainId={currentScoreByDomainId} />
-              </CardContent>
-            </Card>
+            <>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <StatCard
+                  label="Targets Set"
+                  value={targets?.length ?? 0}
+                  sub={(targets?.length ?? 0) === 0 ? "Set a target to show radar overlays" : `${datedTargets.length} with dates`}
+                  icon={Target}
+                />
+                <StatCard
+                  label="High Focus Gaps"
+                  value={highFocusTargets.length}
+                  sub={highFocusTargets.length > 0 ? "Gap is 1.0 point or more" : "No large gaps"}
+                  icon={AlertCircle}
+                  color={highFocusTargets.length > 0 ? "text-red-500" : "text-green-500"}
+                />
+                <StatCard
+                  label="Targets Met"
+                  value={metTargets.length}
+                  sub={targetSummaries.length > 0 ? "Current score meets or exceeds target" : "No targets to compare"}
+                  icon={CheckCircle2}
+                  color="text-green-500"
+                />
+              </div>
+
+              {targets && targets.length === 0 && (
+                <Card className="border-card-border">
+                  <CardContent className="py-8 text-center">
+                    <Target className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-foreground">No maturity targets set yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Start with the domains where the current score is furthest from the desired maturity level.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {targets && targets.length > 0 && (
+                <Card className="border-card-border">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4" />
+                      Gap to Target
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Focus level is calculated from the difference between the latest current score and target score.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {targetSummaries.map(({ target, current, status }) => (
+                        <div key={target.id} className="grid gap-2 rounded-md border border-border/60 px-3 py-2 sm:grid-cols-[1fr_7rem_8rem_11rem] sm:items-center">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{target.domainName}</p>
+                            <p className="text-xs text-muted-foreground">{formatTargetDate(target.targetDate)}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {current == null ? "Current: no data" : `Current: ${current.toFixed(1)}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Target: {target.targetScore.toFixed(1)}</p>
+                          <Badge variant="outline" className="w-fit text-xs">{status.priorityLabel}: {status.label}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="border-card-border">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Target className="w-4 h-4" />
+                    Maturity Targets
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Set target scores for each domain. Targets appear as an overlay on the radar chart.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <TargetSetter
+                    companyId={targetCompanyId}
+                    currentScoreByDomainId={currentScoreByDomainId}
+                    currentScoreByDomainName={domainScoreByDomainName}
+                  />
+                </CardContent>
+              </Card>
+            </>
           )}
         </TabsContent>
 
