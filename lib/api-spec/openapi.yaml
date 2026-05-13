@@ -913,8 +913,25 @@ components:
       properties:
         status:
           type: string
+          enum: [ok, degraded]
+        checkedAt:
+          type: string
+        version:
+          type: ["string", "null"]
+        commit:
+          type: ["string", "null"]
+        database:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [ok, degraded]
+          required:
+            - status
       required:
         - status
+        - checkedAt
+        - database
 
     AuditLog:
       type: object

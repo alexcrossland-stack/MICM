@@ -136,10 +136,11 @@ const mock = vi.hoisted(() => {
   };
 
   const now = new Date("2026-01-01T00:00:00.000Z");
-  const state: { authUserId: string; rows: Rows; nextIds: Record<string, number> } = {
+  const state: { authUserId: string; rows: Rows; nextIds: Record<string, number>; dbHealthy: boolean } = {
     authUserId: "clerk-super",
     rows: {},
     nextIds: {},
+    dbHealthy: true,
   };
 
   const cloneDate = (date: Date) => new Date(date.toISOString());
@@ -211,6 +212,7 @@ const mock = vi.hoisted(() => {
 
   function reset() {
     state.authUserId = "clerk-super";
+    state.dbHealthy = true;
     state.rows = seedRows();
     state.nextIds = Object.fromEntries(
       Object.entries(state.rows).map(([name, rows]) => [name, Math.max(0, ...rows.map((row) => row.id ?? 0)) + 1]),
@@ -399,6 +401,12 @@ const mock = vi.hoisted(() => {
     update: (table: TableRef) => new UpdateBuilder(table),
     delete: (table: TableRef) => new DeleteBuilder(table),
   };
+  const pool = {
+    query: vi.fn(async () => {
+      if (!state.dbHealthy) throw new Error("database unavailable");
+      return { rows: [{ result: 1 }] };
+    }),
+  };
 
   const eq = (column: ColumnRef, value: any): Predicate => ({ kind: "eq", column, value });
   const and = (...predicates: Predicate[]): Predicate => ({ kind: "and", predicates });
@@ -413,7 +421,7 @@ const mock = vi.hoisted(() => {
 
   reset();
 
-  return { state, reset, tables, db, eq, and, inArray, count, sql };
+  return { state, reset, tables, db, pool, eq, and, inArray, count, sql };
 });
 
 vi.mock("@clerk/express", () => ({
@@ -431,12 +439,50 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@workspace/db", () => ({
   db: mock.db,
+  pool: mock.pool,
   ...mock.tables,
 }));
 
 function signInAs(clerkUserId: string) {
   mock.state.authUserId = clerkUserId;
 }
+
+describe("health checks", () => {
+  beforeEach(() => {
+    mock.reset();
+  });
+
+  it("reports healthy database connectivity without exposing sensitive configuration", async () => {
+    mock.state.dbHealthy = true;
+    process.env.GITHUB_SHA = "abcdef1234567890abcdef1234567890abcdef12";
+
+    const response = await request(app).get("/api/healthz");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      status: "ok",
+      commit: "abcdef123456",
+      database: { status: "ok" },
+    });
+    expect(response.body.checkedAt).toEqual(expect.any(String));
+    expect(JSON.stringify(response.body)).not.toContain("DATABASE_URL");
+    expect(JSON.stringify(response.body)).not.toContain("postgres");
+
+    delete process.env.GITHUB_SHA;
+  });
+
+  it("reports degraded status when the database ping fails", async () => {
+    mock.state.dbHealthy = false;
+
+    const response = await request(app).get("/api/healthz");
+
+    expect(response.status).toBe(503);
+    expect(response.body).toMatchObject({
+      status: "degraded",
+      database: { status: "degraded" },
+    });
+  });
+});
 
 describe("tenant isolation and role permissions", () => {
   beforeEach(() => {
