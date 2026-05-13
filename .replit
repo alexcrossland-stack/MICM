@@ -33,3 +33,9 @@ externalPort = 80
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.development]
+ENABLE_DEMO_AUTH = "true"
+VITE_ENABLE_DEMO_AUTH = "true"
