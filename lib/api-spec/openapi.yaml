@@ -18,6 +18,8 @@ tags:
     description: Assessment cycle management
   - name: scores
     description: Assessment scoring
+  - name: criterion-notes
+    description: Criterion-level notes and evidence comments
   - name: actions
     description: Improvement action tracking
   - name: invitations
@@ -470,6 +472,49 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Score"
+
+  /assessment-criterion-notes:
+    get:
+      operationId: listCriterionNotes
+      tags: [criterion-notes]
+      summary: List criterion notes for an assessment
+      parameters:
+        - name: assessmentId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: criterionId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Criterion notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CriterionNote"
+    post:
+      operationId: createCriterionNote
+      tags: [criterion-notes]
+      summary: Add a note or evidence comment to an assessment criterion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCriterionNoteBody"
+      responses:
+        "201":
+          description: Created criterion note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CriterionNote"
 
   /scores/radar:
     get:
@@ -1148,11 +1193,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DomainScore"
+        criterionNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CriterionNote"
       required:
         - assessmentId
         - assessmentName
         - userScores
         - aggregateScores
+        - criterionNotes
 
     UserScoreSet:
       type: object
@@ -1244,6 +1294,55 @@ components:
       required:
         - criterionId
         - score
+
+    CriterionNote:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        assessmentId:
+          type: integer
+        criterionId:
+          type: integer
+        authorUserId:
+          type: integer
+        authorName:
+          type: string
+        note:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - companyId
+        - assessmentId
+        - criterionId
+        - authorUserId
+        - authorName
+        - note
+        - createdAt
+        - updatedAt
+
+    CreateCriterionNoteBody:
+      type: object
+      properties:
+        assessmentId:
+          type: integer
+        criterionId:
+          type: integer
+        note:
+          type: string
+          minLength: 1
+      required:
+        - assessmentId
+        - criterionId
+        - note
 
     RadarData:
       type: object
@@ -1502,11 +1601,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Action"
+        criterionNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CriterionNote"
       required:
         - company
         - assessmentCycles
         - progressData
         - actions
+        - criterionNotes
 
     SuperAdminReport:
       type: object

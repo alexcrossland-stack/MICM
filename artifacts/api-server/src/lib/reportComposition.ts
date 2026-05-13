@@ -19,6 +19,7 @@ export type ReportComposition = {
     completedAssessments: number;
     totalAssessments: number;
     openActions: number;
+    evidenceNotes: number;
   };
   executiveSummary: {
     headline: string;
@@ -74,6 +75,7 @@ export function composeCompanyReport(
     .filter((score): score is number => score != null);
   const latestOverallScore = validScores.length > 0 ? round2(validScores.reduce((a, b) => a + b, 0) / validScores.length) : null;
   const openActions = report.actions.filter((action) => action.status !== "completed").length;
+  const evidenceNotes = report.criterionNotes.length;
   const priorityActions = report.actions
     .filter((action) => action.status !== "completed")
     .sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority))
@@ -98,10 +100,11 @@ export function composeCompanyReport(
       completedAssessments,
       totalAssessments: report.assessmentCycles.length,
       openActions,
+      evidenceNotes,
     },
     executiveSummary: {
       headline: buildHeadline(report.company.name, latestOverallScore, openActions),
-      bullets: buildExecutiveBullets(completedAssessments, latestOverallScore, openActions, template),
+      bullets: buildExecutiveBullets(completedAssessments, latestOverallScore, openActions, evidenceNotes, template),
     },
     maturityOverview: {
       overallScore: latestOverallScore,
@@ -158,6 +161,7 @@ function buildExecutiveBullets(
   completedAssessments: number,
   latestOverallScore: number | null,
   openActions: number,
+  evidenceNotes: number,
   template: ReportTemplate,
 ) {
   const bullets = [
@@ -166,6 +170,7 @@ function buildExecutiveBullets(
       ? "No completed assessment has enough data to calculate an overall score."
       : `Latest overall maturity score is ${latestOverallScore} out of 4.`,
     `${openActions} open action${openActions === 1 ? "" : "s"} remain on the roadmap.`,
+    `${evidenceNotes} criterion evidence note${evidenceNotes === 1 ? "" : "s"} ${evidenceNotes === 1 ? "is" : "are"} available for review context.`,
   ];
   if (template === "operational_detail") {
     bullets.push("Operational detail template includes the full domain findings and priority action roadmap.");

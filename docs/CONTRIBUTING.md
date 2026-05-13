@@ -59,7 +59,7 @@ Complete the following against a running local or staging environment with all t
 **Company User must be able to:**
 - [ ] See their assigned assessments
 - [ ] Take an active assessment
-- [ ] Submit scores and notes per criterion
+- [ ] Submit scores and lightweight text evidence notes per criterion
 - [ ] NOT see the Companies or Users management pages
 
 ### 3. Tenant Isolation
