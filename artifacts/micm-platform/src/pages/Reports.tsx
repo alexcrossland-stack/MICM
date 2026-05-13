@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend,
 } from "recharts";
-import { BarChart3, TrendingUp, Building2, Download, Loader2 } from "lucide-react";
+import { BarChart3, TrendingUp, Building2, Download, Loader2, MessageSquare } from "lucide-react";
 import {
   ScoreBandText,
   AssessmentMultiSelect,
@@ -131,6 +131,9 @@ export default function ReportsPage() {
 
   const completedAssessments = (assessments ?? []).filter((a) => a.status === "completed");
   const canExportReports = isSuperAdmin || isCompanyAdmin;
+  const recentReportNotes = [...(report?.criterionNotes ?? [])]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
 
   const sortedAssessments = assessments
     ? [...assessments].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -309,7 +312,7 @@ export default function ReportsPage() {
           )}
 
           {/* Summary cards */}
-          <div className="grid sm:grid-cols-3 gap-4">
+          <div className="grid sm:grid-cols-4 gap-4">
             <Card className="border-card-border">
               <CardContent className="p-4">
                 <p className="text-2xl font-bold">{report.assessmentCycles?.length ?? 0}</p>
@@ -343,7 +346,40 @@ export default function ReportsPage() {
                 )}
               </CardContent>
             </Card>
+            <Card className="border-card-border">
+              <CardContent className="p-4">
+                <p className="text-2xl font-bold">{report.criterionNotes?.length ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Evidence Notes</p>
+              </CardContent>
+            </Card>
           </div>
+
+          <Card className="border-card-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Report evidence notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentReportNotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No evidence notes yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentReportNotes.map((note) => (
+                    <div key={note.id} className="rounded-md border border-border bg-muted/30 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-medium">Criterion {note.criterionId}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(note.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{note.authorName}</p>
+                      <p className="text-sm mt-2 line-clamp-3">{note.note}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Assessment overlay radar */}
           {sortedAssessments.length > 0 && (

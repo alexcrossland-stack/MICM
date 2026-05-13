@@ -7,6 +7,11 @@ import {
   useAssignAssessment,
   useListCompanyUsers,
   useGetRadarData,
+  useListDomains,
+  useListCriterionNotes,
+  useCreateCriterionNote,
+  type CriterionNote,
+  type Domain,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,14 +20,45 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Users, CheckCircle2, ChevronLeft, Play } from "lucide-react";
+import { Users, CheckCircle2, ChevronLeft, Play, MessageSquare, Plus, Loader2, AlertCircle } from "lucide-react";
 import { ScoreGuide } from "@/components/ScoreGuide";
 
 const RADAR_COLORS = ["#6b8ef5", "#f5a97c", "#9cf5a4", "#f5e97c", "#c47cf5", "#7cf5e5"];
+
+type CriterionOption = {
+  id: number;
+  name: string;
+  categoryName: string;
+  domainName: string;
+};
+
+function buildCriterionOptions(domains: Domain[] | undefined): CriterionOption[] {
+  return (domains ?? []).flatMap((domain) =>
+    domain.categories.flatMap((category) =>
+      category.criteria.map((criterion) => ({
+        id: criterion.id,
+        name: criterion.name,
+        categoryName: category.name,
+        domainName: domain.name,
+      })),
+    ),
+  );
+}
+
+function formatNoteDate(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function AssessmentDetailPage() {
   const [, params] = useRoute("/assessments/:id");
@@ -33,6 +69,9 @@ export default function AssessmentDetailPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [selectedCriterionId, setSelectedCriterionId] = useState("");
+  const [noteText, setNoteText] = useState("");
+  const [noteStatus, setNoteStatus] = useState<string | null>(null);
 
   const { data: assessment, isLoading } = useGetAssessment(id);
   const { data: results } = useGetAssessmentResults(id);
@@ -40,12 +79,30 @@ export default function AssessmentDetailPage() {
   const { data: users } = useListCompanyUsers(companyId ?? 0, { query: { enabled: !!companyId } as any });
   const { mutateAsync: updateAssessment } = useUpdateAssessment();
   const { mutateAsync: assignAssessment } = useAssignAssessment();
+  const canManage = isCompanyAdmin || isSuperAdmin;
+  const isAssigned = userId != null && !!assessment?.assignedUserIds?.includes(userId);
+  const canUseEvidenceNotes = canManage || isAssigned;
+  const { data: domains, isLoading: domainsLoading } = useListDomains({
+    query: { enabled: canUseEvidenceNotes } as any,
+  });
+  const {
+    data: criterionNotes,
+    isLoading: notesLoading,
+    error: notesError,
+  } = useListCriterionNotes(
+    { assessmentId: id },
+    { query: { enabled: !!id && canUseEvidenceNotes } as any },
+  );
+  const { mutateAsync: createCriterionNote, isPending: creatingNote } = useCreateCriterionNote();
 
   if (isLoading || !assessment) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
-  const canManage = isCompanyAdmin || isSuperAdmin;
-  const isAssigned = userId != null && assessment.assignedUserIds?.includes(userId);
   const isMyCompleted = userId != null && assessment.completedUserIds?.includes(userId);
+  const criterionOptions = buildCriterionOptions(domains);
+  const criterionById = new Map(criterionOptions.map((criterion) => [criterion.id, criterion]));
+  const sortedCriterionNotes = [...(criterionNotes ?? [])].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 
   const radarChartData = radarData ? radarData.domains.map((name: string, i: number) => {
     const point: any = { domain: name };
@@ -74,6 +131,26 @@ export default function AssessmentDetailPage() {
       setAssignOpen(false);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  }
+
+  async function handleCreateNote() {
+    const criterionId = Number(selectedCriterionId);
+    const note = noteText.trim();
+    if (!criterionId || !note) return;
+    setNoteStatus(null);
+    try {
+      await createCriterionNote({ data: { assessmentId: id, criterionId, note } });
+      setNoteText("");
+      setNoteStatus("Evidence note saved.");
+      qc.invalidateQueries();
+      toast({ title: "Evidence note saved" });
+    } catch (e: any) {
+      const message = e?.response?.status === 403
+        ? "You do not have access to add notes for this assessment."
+        : e?.message ?? "Evidence note could not be saved.";
+      setNoteStatus(message);
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   }
 
@@ -203,6 +280,103 @@ export default function AssessmentDetailPage() {
             </div>
             <div className="px-4 pb-4">
               <ScoreGuide variant="compact" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {canUseEvidenceNotes && (
+        <Card className="border-card-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Evidence notes
+              {criterionNotes && <Badge variant="secondary">{criterionNotes.length}</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(notesLoading || domainsLoading) && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading evidence notes
+              </div>
+            )}
+
+            {notesError && (
+              <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <AlertCircle className="w-4 h-4" />
+                {(notesError as any)?.response?.status === 403
+                  ? "You do not have access to view notes for this assessment."
+                  : "Evidence notes could not be loaded."}
+              </div>
+            )}
+
+            {!notesLoading && !notesError && sortedCriterionNotes.length === 0 && (
+              <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                No evidence notes yet.
+              </div>
+            )}
+
+            {sortedCriterionNotes.length > 0 && (
+              <div className="space-y-2">
+                {sortedCriterionNotes.map((note: CriterionNote) => {
+                  const criterion = criterionById.get(note.criterionId);
+                  return (
+                    <div key={note.id} className="rounded-md border border-border bg-muted/30 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium">
+                            {criterion ? `${criterion.domainName} / ${criterion.categoryName} / ${criterion.name}` : `Criterion ${note.criterionId}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {note.authorName} · {formatNoteDate(note.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm mt-2 whitespace-pre-wrap">{note.note}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="grid gap-3 border-t border-border pt-4">
+              <div className="grid gap-1.5">
+                <Label>Criterion</Label>
+                <Select value={selectedCriterionId} onValueChange={setSelectedCriterionId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select criterion" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {criterionOptions.map((criterion) => (
+                      <SelectItem key={criterion.id} value={String(criterion.id)}>
+                        {criterion.domainName} / {criterion.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Evidence note</Label>
+                <Textarea
+                  value={noteText}
+                  onChange={(event) => setNoteText(event.target.value)}
+                  rows={3}
+                  placeholder="Add an evidence note or improvement note"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  size="sm"
+                  onClick={handleCreateNote}
+                  disabled={!selectedCriterionId || !noteText.trim() || creatingNote}
+                  className="gap-2"
+                >
+                  {creatingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add note
+                </Button>
+                {noteStatus && <p className="text-xs text-muted-foreground">{noteStatus}</p>}
+              </div>
             </div>
           </CardContent>
         </Card>
