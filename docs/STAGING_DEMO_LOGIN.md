@@ -18,9 +18,9 @@ Do not use real names, real emails, real organisations, or production credential
 
 MICM authorizes users by matching the authenticated Clerk user ID to `users.clerk_user_id` in the database.
 
-The existing one-click demo auth endpoint does not automatically map to these staging seed records. It is still hardcoded to the original demo Clerk IDs in `artifacts/api-server/src/routes/demo.ts` and remains blocked when `NODE_ENV=production`.
+The one-click demo auth endpoint maps to these staging seed records by role and email. It remains blocked when `NODE_ENV=production`.
 
-For these staging demo accounts, use normal Clerk sign-in against a staging Clerk application, then update the seeded database records with the generated staging Clerk user IDs.
+For these staging demo accounts, create users in a staging Clerk application, then update the seeded database records with the generated staging Clerk user IDs. After that mapping exists, the "Development / Staging Demo Access" buttons can request short-lived Clerk sign-in tokens for those users when demo auth is explicitly enabled outside production.
 
 ## Setup Steps
 
@@ -85,9 +85,19 @@ where email in (
 order by email;
 ```
 
+## One-Click Demo Access
+
+To show the staging one-click buttons:
+
+- Set `ENABLE_DEMO_AUTH=true` for the API server.
+- Set `VITE_ENABLE_DEMO_AUTH=true` for the frontend build/runtime.
+- Keep `NODE_ENV` outside `production`.
+
+The frontend hides the demo panel in production builds, and the API returns 404 for demo sign-in tokens when `NODE_ENV=production`.
+
 ## Role Smoke Checks
 
-After signing in through normal Clerk login:
+After signing in through normal Clerk login or the staging one-click buttons:
 
 - Super Admin can access Programme Intelligence and cross-company reporting.
 - Company Admin can access the primary seeded company, dashboards, reports, exports, analytics, targets, evidence notes, and assigned assessments for that company only.

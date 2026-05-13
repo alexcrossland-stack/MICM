@@ -166,15 +166,16 @@ Clerk tokens expire. Add:
 
 ---
 
-### #015 — Remove hardcoded demo Clerk user IDs
+### #015 — Automate staging demo Clerk user reconciliation
 **Priority: Medium**
 
-The Clerk user IDs in `artifacts/api-server/src/routes/demo.ts` are hardcoded to the Replit development Clerk tenant. Replace them with a DB-driven lookup:
-- Store demo user flags in the `users` table
-- The demo endpoint looks up the Clerk ID by role from the DB
-- Remove the hardcoded `DEMO_USERS` map
+The staging demo endpoint now uses DB-backed seeded demo records, but operators still need to create or map the matching users in the staging Clerk dashboard. Add a safer reconciliation workflow:
+- Detect seeded demo records whose `clerk_user_id` does not match an existing staging Clerk user
+- Create or update staging Clerk users only in non-production environments
+- Refuse production environments and production-like Clerk keys
+- Keep the one-click demo endpoint disabled in production
 
-This makes the demo system portable to any Clerk tenant without code changes.
+This would reduce manual staging setup while preserving the production demo-auth lockout.
 
 ---
 

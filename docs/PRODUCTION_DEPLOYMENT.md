@@ -70,7 +70,7 @@ Required setup:
 6. Create or invite the first production Super Admin through the approved onboarding process.
 7. Confirm production user records in the `users` table have the correct `role` and `companyId` values.
 
-Do not reuse development Clerk keys, staging Clerk keys, or hardcoded demo Clerk users in production.
+Do not reuse development Clerk keys, staging Clerk keys, or seeded demo users in production.
 
 ## Demo Auth Production Lockout
 

@@ -43,9 +43,9 @@ Complete the following against a running local or staging environment with all t
 
 ### 1. Authentication
 
-- [ ] Sign in as Super Admin (`superadmin@micm-demo.com`)
-- [ ] Sign in as Company Admin (`companyadmin@micm-demo.com`)
-- [ ] Sign in as Company User (`companyuser@micm-demo.com`)
+- [ ] Sign in as Super Admin (`superadmin.demo@micm.local`)
+- [ ] Sign in as Company Admin (`companyadmin.demo@micm.local`)
+- [ ] Sign in as Company User (`companyuser.demo@micm.local`)
 - [ ] Sign out clears the session and redirects to `/sign-in`
 - [ ] Accessing a protected route while unauthenticated redirects to `/sign-in`
 

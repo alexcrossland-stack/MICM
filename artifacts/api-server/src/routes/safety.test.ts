@@ -980,6 +980,10 @@ describe("audit logging foundation", () => {
 });
 
 describe("demo authentication guardrails", () => {
+  beforeEach(() => {
+    mock.reset();
+  });
+
   afterEach(() => {
     delete process.env.ENABLE_DEMO_AUTH;
     delete process.env.CLERK_SECRET_KEY;
@@ -1017,7 +1021,19 @@ describe("demo authentication guardrails", () => {
     process.env.NODE_ENV = "development";
     process.env.ENABLE_DEMO_AUTH = "true";
     process.env.CLERK_SECRET_KEY = "fake_demo_route_test_key";
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+    mock.state.rows.users.push({
+      id: 50,
+      clerkUserId: "user_staging_company_user",
+      email: "companyuser.demo@micm.local",
+      firstName: "Demo",
+      lastName: "Company User",
+      role: "company_user",
+      companyId: 1,
+      isActive: true,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({ token: "demo-ticket", url: "https://clerk.example/sign-in" }),
     } as Response);
@@ -1029,5 +1045,24 @@ describe("demo authentication guardrails", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ token: "demo-ticket", label: "Company User" });
     expect(globalThis.fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string)).toMatchObject({
+      user_id: "user_staging_company_user",
+      expires_in_seconds: 300,
+    });
+  });
+
+  it("does not create a Clerk token when seeded demo records are missing", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.ENABLE_DEMO_AUTH = "true";
+    process.env.CLERK_SECRET_KEY = "fake_demo_route_test_key";
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const response = await request(app)
+      .post("/api/demo/sign-in-token")
+      .send({ role: "company_user" });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toContain("Run staging demo seed first");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
