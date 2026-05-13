@@ -179,7 +179,7 @@ DATABASE_URL=<target_url> pnpm --filter @workspace/db run migrate
 |---|---|---|
 | `seed-domains` | Creates the 6 MICM domains, categories, and criteria | Yes |
 | `seed-demo-users` | Creates 3 Clerk dev users + DB records + sample company/assessment/scores | Yes (skips existing) |
-| `seed-staging-demo-data` | Creates fake DB-only staging/demo data across multiple companies, users, assessments, actions, targets, and evidence notes | Yes (replaces prior `MICM STAGING DEMO - ...` records) |
+| `seed-staging-demo-data` | Creates fake DB-only staging/demo data across multiple companies, canonical demo account records, users, assessments, actions, targets, and evidence notes | Yes (replaces prior `MICM STAGING DEMO - ...` records) |
 
 Domain data is read-only at runtime — no UI exists to edit it. Re-run `seed-domains` if domain data is missing or after a schema wipe.
 
@@ -188,6 +188,8 @@ Domain data is read-only at runtime — no UI exists to edit it. Re-run `seed-do
 ```bash
 ENABLE_STAGING_DEMO_SEED=true DATABASE_URL=<non_production_url> pnpm --filter @workspace/scripts run seed-staging-demo-data
 ```
+
+Canonical fake staging demo account records are seeded as `superadmin.demo@micm.local`, `companyadmin.demo@micm.local`, and `companyuser.demo@micm.local`.
 
 See `docs/STAGING_DEMO_DATA.md` for the full dataset shape and guardrails.
 

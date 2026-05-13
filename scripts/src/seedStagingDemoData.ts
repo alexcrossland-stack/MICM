@@ -8,6 +8,11 @@
 
 import { inArray } from "drizzle-orm";
 import { assertStagingDemoSeedAllowed } from "./stagingDemoSeedGuards";
+import {
+  STAGING_DEMO_SUPER_ADMIN,
+  stagingDemoClerkUserIds,
+  stagingDemoUsersForCompany,
+} from "./stagingDemoAccounts";
 
 const COMPANY_DATA = [
   {
@@ -35,14 +40,6 @@ const COMPANY_DATA = [
     baseScore: 3,
   },
 ] as const;
-
-const SUPER_ADMIN = {
-  clerkUserId: "micm-staging-demo-super-admin",
-  email: "super.admin@example.test",
-  firstName: "Morgan",
-  lastName: "Rivers",
-  role: "super_admin",
-} as const;
 
 type DbModule = typeof import("@workspace/db");
 type CompanyRow = { id: number };
@@ -107,14 +104,9 @@ async function deleteExistingDemoData(dbm: DbModule) {
       ),
     );
   const companyIds = demoCompanies.map((company) => company.id);
-  const allDemoClerkIds = [
-    SUPER_ADMIN.clerkUserId,
-    ...COMPANY_DATA.flatMap((company) => [
-      `micm-staging-demo-${company.key}-admin`,
-      `micm-staging-demo-${company.key}-user-a`,
-      `micm-staging-demo-${company.key}-user-b`,
-    ]),
-  ];
+  const allDemoClerkIds = stagingDemoClerkUserIds(
+    COMPANY_DATA.map((company) => company.key),
+  );
 
   if (companyIds.length > 0) {
     const demoCycles = await db
@@ -196,11 +188,11 @@ async function seed() {
   const [superAdmin] = await db
     .insert(usersTable)
     .values({
-      clerkUserId: SUPER_ADMIN.clerkUserId,
-      email: SUPER_ADMIN.email,
-      firstName: SUPER_ADMIN.firstName,
-      lastName: SUPER_ADMIN.lastName,
-      role: SUPER_ADMIN.role,
+      clerkUserId: STAGING_DEMO_SUPER_ADMIN.clerkUserId,
+      email: STAGING_DEMO_SUPER_ADMIN.email,
+      firstName: STAGING_DEMO_SUPER_ADMIN.firstName,
+      lastName: STAGING_DEMO_SUPER_ADMIN.lastName,
+      role: STAGING_DEMO_SUPER_ADMIN.role,
       companyId: null,
       isActive: true,
     })
@@ -233,34 +225,35 @@ async function seed() {
       })
       .returning();
     companyRows.push(company);
+    const demoUsers = stagingDemoUsersForCompany(companyData.key);
 
     const [admin, userA, userB] = await db
       .insert(usersTable)
       .values([
         {
-          clerkUserId: `micm-staging-demo-${companyData.key}-admin`,
-          email: `${companyData.key}.admin@example.test`,
-          firstName: "Demo",
-          lastName: `${companyData.key} Admin`,
-          role: "company_admin",
+          clerkUserId: demoUsers.admin.clerkUserId,
+          email: demoUsers.admin.email,
+          firstName: demoUsers.admin.firstName,
+          lastName: demoUsers.admin.lastName,
+          role: demoUsers.admin.role,
           companyId: company.id,
           isActive: true,
         },
         {
-          clerkUserId: `micm-staging-demo-${companyData.key}-user-a`,
-          email: `${companyData.key}.operator@example.test`,
-          firstName: "Demo",
-          lastName: `${companyData.key} Operator`,
-          role: "company_user",
+          clerkUserId: demoUsers.userA.clerkUserId,
+          email: demoUsers.userA.email,
+          firstName: demoUsers.userA.firstName,
+          lastName: demoUsers.userA.lastName,
+          role: demoUsers.userA.role,
           companyId: company.id,
           isActive: true,
         },
         {
-          clerkUserId: `micm-staging-demo-${companyData.key}-user-b`,
-          email: `${companyData.key}.lead@example.test`,
-          firstName: "Demo",
-          lastName: `${companyData.key} Lead`,
-          role: "company_user",
+          clerkUserId: demoUsers.userB.clerkUserId,
+          email: demoUsers.userB.email,
+          firstName: demoUsers.userB.firstName,
+          lastName: demoUsers.userB.lastName,
+          role: demoUsers.userB.role,
           companyId: company.id,
           isActive: true,
         },
@@ -532,6 +525,9 @@ async function seed() {
     `Created fake staging/demo records for ${companyRows.length} companies.`,
   );
   console.log(`Created fake Super Admin DB user: ${superAdmin.email}`);
+  console.log(
+    "Created canonical staging demo DB users: superadmin.demo@micm.local, companyadmin.demo@micm.local, companyuser.demo@micm.local.",
+  );
   console.log(
     "No Clerk users, passwords, secrets, or production identifiers were created.",
   );
