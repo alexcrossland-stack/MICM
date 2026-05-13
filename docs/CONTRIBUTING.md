@@ -159,6 +159,8 @@ When changing report exports, also verify:
 
 Use `pnpm --filter @workspace/db run push:dev` only for disposable local databases while prototyping. Do not use schema push for staging or production.
 
+For richer local or staging validation, use the fake DB-only staging/demo seed documented in `docs/STAGING_DEMO_DATA.md`. It requires `ENABLE_STAGING_DEMO_SEED=true`, refuses `NODE_ENV=production`, and must never be run against production databases.
+
 ---
 
 ## Security Checklist

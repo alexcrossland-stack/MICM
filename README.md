@@ -115,6 +115,10 @@ pnpm --filter @workspace/scripts run seed-domains
 # 5. (Optional) Seed demo users and sample data
 #    Requires CLERK_SECRET_KEY to be set and pointing at a Clerk dev tenant
 pnpm --filter @workspace/scripts run seed-demo-users
+
+# 6. (Optional) Seed a richer fake staging/demo dataset
+#    Requires an explicit non-production guard flag
+ENABLE_STAGING_DEMO_SEED=true pnpm --filter @workspace/scripts run seed-staging-demo-data
 ```
 
 ---
@@ -175,8 +179,17 @@ DATABASE_URL=<target_url> pnpm --filter @workspace/db run migrate
 |---|---|---|
 | `seed-domains` | Creates the 6 MICM domains, categories, and criteria | Yes |
 | `seed-demo-users` | Creates 3 Clerk dev users + DB records + sample company/assessment/scores | Yes (skips existing) |
+| `seed-staging-demo-data` | Creates fake DB-only staging/demo data across multiple companies, users, assessments, actions, targets, and evidence notes | Yes (replaces prior `MICM STAGING DEMO - ...` records) |
 
 Domain data is read-only at runtime — no UI exists to edit it. Re-run `seed-domains` if domain data is missing or after a schema wipe.
+
+`seed-staging-demo-data` is for non-production validation only. It requires `ENABLE_STAGING_DEMO_SEED=true`, refuses to run when `NODE_ENV=production`, and refuses `DATABASE_URL` values containing `prod`, `production`, or `live`. It does not create Clerk users, passwords, secrets, or production identifiers. Run `seed-domains` first, then:
+
+```bash
+ENABLE_STAGING_DEMO_SEED=true DATABASE_URL=<non_production_url> pnpm --filter @workspace/scripts run seed-staging-demo-data
+```
+
+See `docs/STAGING_DEMO_DATA.md` for the full dataset shape and guardrails.
 
 ---
 
@@ -312,7 +325,7 @@ These credentials are only valid against the Replit development Clerk tenant and
 │   ├── api-client-react/    # Generated React Query hooks (do not edit)
 │   ├── api-zod/             # Generated Zod schemas (do not edit)
 │   └── db/                  # Drizzle schema, migrations, DB client, drizzle.config.ts
-├── scripts/                 # One-off utility scripts (seed-domains, seed-demo-users)
+├── scripts/                 # One-off utility scripts (seed-domains, seed-demo-users, seed-staging-demo-data)
 ├── docs/                    # Contributor guides and backlog
 │   └── DATABASE_MIGRATIONS.md # Migration workflow and review checklist
 ├── .env.example             # Environment variable reference
