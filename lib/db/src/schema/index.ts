@@ -4,5 +4,6 @@ export * from "./invitations";
 export * from "./domains";
 export * from "./assessments";
 export * from "./scores";
+export * from "./criterionNotes";
 export * from "./actions";
 export * from "./targets";

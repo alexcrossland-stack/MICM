@@ -85,6 +85,16 @@ const mock = vi.hoisted(() => {
       "createdAt",
       "updatedAt",
     ]),
+    criterionNotesTable: makeTable("criterionNotes", [
+      "id",
+      "companyId",
+      "assessmentId",
+      "criterionId",
+      "authorUserId",
+      "note",
+      "createdAt",
+      "updatedAt",
+    ]),
     actionsTable: makeTable("actions", [
       "id",
       "companyId",
@@ -168,6 +178,10 @@ const mock = vi.hoisted(() => {
         dated({ id: 4, assessmentId: 202, userId: 5, criterionId: 1, score: 1, notes: "Other" }),
         dated({ id: 5, assessmentId: 202, userId: 5, criterionId: 2, score: 2, notes: "Other" }),
         dated({ id: 6, assessmentId: 202, userId: 5, criterionId: 3, score: 2, notes: "Other" }),
+      ],
+      criterionNotes: [
+        dated({ id: 1, companyId: 1, assessmentId: 103, criterionId: 1, authorUserId: 2, note: "Customer evidence reviewed" }),
+        dated({ id: 2, companyId: 2, assessmentId: 202, criterionId: 1, authorUserId: 4, note: "Beta evidence note" }),
       ],
       actions: [
         dated({ id: 1, companyId: 1, assessmentId: 103, domainId: 1, title: "A action", description: "Action", status: "not_started", priority: "medium", assignedUserId: 3, dueDate: null, completedDate: null }),
@@ -524,6 +538,104 @@ describe("assessment lifecycle", () => {
   });
 });
 
+describe("criterion evidence notes", () => {
+  beforeEach(() => {
+    mock.reset();
+  });
+
+  it("allows same-company admins and assigned users to create and list criterion notes", async () => {
+    signInAs("clerk-admin-a");
+    const adminCreateResponse = await request(app)
+      .post("/api/assessment-criterion-notes")
+      .send({ assessmentId: 103, criterionId: 1, note: "  Board pack evidence attached offline  " });
+    expect(adminCreateResponse.status).toBe(201);
+    expect(adminCreateResponse.body).toMatchObject({
+      companyId: 1,
+      assessmentId: 103,
+      criterionId: 1,
+      authorUserId: 2,
+      authorName: "Admin A",
+      note: "Board pack evidence attached offline",
+    });
+
+    const adminListResponse = await request(app)
+      .get("/api/assessment-criterion-notes")
+      .query({ assessmentId: 103, criterionId: 1 });
+    expect(adminListResponse.status).toBe(200);
+    expect(adminListResponse.body.map((note: any) => note.note)).toEqual([
+      "Customer evidence reviewed",
+      "Board pack evidence attached offline",
+    ]);
+
+    signInAs("clerk-user-a");
+    const userCreateResponse = await request(app)
+      .post("/api/assessment-criterion-notes")
+      .send({ assessmentId: 102, criterionId: 2, note: "Operator interview evidence" });
+    expect(userCreateResponse.status).toBe(201);
+    expect(userCreateResponse.body).toMatchObject({
+      companyId: 1,
+      assessmentId: 102,
+      criterionId: 2,
+      authorUserId: 3,
+      authorName: "User A",
+    });
+
+    const userListResponse = await request(app)
+      .get("/api/assessment-criterion-notes")
+      .query({ assessmentId: 102 });
+    expect(userListResponse.status).toBe(200);
+    expect(userListResponse.body.map((note: any) => note.note)).toEqual(["Operator interview evidence"]);
+  });
+
+  it("blocks cross-company and unassigned criterion note access", async () => {
+    signInAs("clerk-admin-a");
+    expect((await request(app).get("/api/assessment-criterion-notes").query({ assessmentId: 202 })).status).toBe(403);
+    expect(
+      (await request(app)
+        .post("/api/assessment-criterion-notes")
+        .send({ assessmentId: 202, criterionId: 1, note: "Cross-company note" })).status,
+    ).toBe(403);
+
+    signInAs("clerk-user-a");
+    expect(
+      (await request(app)
+        .post("/api/assessment-criterion-notes")
+        .send({ assessmentId: 101, criterionId: 1, note: "Unassigned note" })).status,
+    ).toBe(403);
+
+    signInAs("clerk-user-b");
+    expect((await request(app).get("/api/assessment-criterion-notes").query({ assessmentId: 103 })).status).toBe(403);
+
+    signInAs("clerk-super");
+    const superAdminResponse = await request(app).get("/api/assessment-criterion-notes").query({ assessmentId: 202 });
+    expect(superAdminResponse.status).toBe(200);
+    expect(superAdminResponse.body.map((note: any) => note.companyId)).toEqual([2]);
+  });
+
+  it("surfaces criterion notes in assessment results and report composition", async () => {
+    signInAs("clerk-admin-a");
+
+    const resultsResponse = await request(app).get("/api/assessments/103/results");
+    expect(resultsResponse.status).toBe(200);
+    expect(resultsResponse.body.criterionNotes).toHaveLength(1);
+    expect(resultsResponse.body.criterionNotes[0]).toMatchObject({
+      companyId: 1,
+      assessmentId: 103,
+      criterionId: 1,
+      authorName: "Admin A",
+      note: "Customer evidence reviewed",
+    });
+
+    const reportResponse = await request(app).get("/api/reports/company/1");
+    expect(reportResponse.status).toBe(200);
+    expect(reportResponse.body.criterionNotes).toHaveLength(1);
+
+    const composition = composeCompanyReport(reportResponse.body, "operational_detail", "company_admin");
+    expect(composition.coverSummary.evidenceNotes).toBe(1);
+    expect(composition.executiveSummary.bullets).toContain("1 criterion evidence note is available for review context.");
+  });
+});
+
 describe("dashboard, report, and analytics smoke coverage", () => {
   beforeEach(() => {
     mock.reset();
@@ -635,6 +747,7 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(composition.maturityOverview.overallScore).toBe(3.5);
     expect(composition.domainFindings.map((finding) => finding.domainName)).toEqual(["Strategy", "Operations"]);
     expect(composition.actionRoadmap.byStatus.not_started).toBe(1);
+    expect(composition.coverSummary.evidenceNotes).toBe(1);
     expect(composition.benchmarking.available).toBe(true);
     expect(composition.includedSections).toEqual([
       "cover_summary",

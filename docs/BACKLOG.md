@@ -76,6 +76,8 @@ Currently users can submit an assessment with only some criteria scored. Add:
 - API-level enforcement (configurable: warn vs. block)
 - Show per-domain completion percentage clearly in the domain tab bar
 
+Lightweight text evidence notes now exist at criterion level. File uploads, attachment storage, and richer review UI remain separate future work.
+
 ---
 
 ### #007 — Action tracking improvements

@@ -242,11 +242,24 @@ export interface UserScoreSet {
   completedAt?: string | null;
 }
 
+export interface CriterionNote {
+  id: number;
+  companyId: number;
+  assessmentId: number;
+  criterionId: number;
+  authorUserId: number;
+  authorName: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssessmentResults {
   assessmentId: number;
   assessmentName: string;
   userScores: UserScoreSet[];
   aggregateScores: DomainScore[];
+  criterionNotes: CriterionNote[];
 }
 
 export interface Score {
@@ -271,6 +284,13 @@ export interface ScoreInput {
 export interface SubmitScoresBody {
   assessmentId: number;
   scores: ScoreInput[];
+}
+
+export interface CreateCriterionNoteBody {
+  assessmentId: number;
+  criterionId: number;
+  /** @minLength 1 */
+  note: string;
 }
 
 export interface RadarSeries {
@@ -428,6 +448,7 @@ export interface CompanyReport {
   latestResults?: AssessmentResults;
   progressData: ProgressData;
   actions: Action[];
+  criterionNotes: CriterionNote[];
 }
 
 export interface CompanyReportSummary {
@@ -545,6 +566,14 @@ export type ListScoresParams = {
    * @nullable
    */
   userId?: number | null;
+};
+
+export type ListCriterionNotesParams = {
+  assessmentId: number;
+  /**
+   * @nullable
+   */
+  criterionId?: number | null;
 };
 
 export type GetRadarDataParams = {

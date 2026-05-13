@@ -29,7 +29,9 @@ import type {
   CreateActionBody,
   CreateAssessmentBody,
   CreateCompanyBody,
+  CreateCriterionNoteBody,
   CreateInvitationBody,
+  CriterionNote,
   Domain,
   GetActionsSummaryParams,
   GetCompanyReportExportParams,
@@ -41,6 +43,7 @@ import type {
   Invitation,
   ListActionsParams,
   ListAssessmentsParams,
+  ListCriterionNotesParams,
   ListInvitationsParams,
   ListScoresParams,
   ListTargetsParams,
@@ -1991,6 +1994,192 @@ export const useSubmitScores = <
   TContext
 > => {
   return useMutation(getSubmitScoresMutationOptions(options));
+};
+
+/**
+ * @summary List criterion notes for an assessment
+ */
+export const getListCriterionNotesUrl = (params: ListCriterionNotesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/assessment-criterion-notes?${stringifiedParams}`
+    : `/api/assessment-criterion-notes`;
+};
+
+export const listCriterionNotes = async (
+  params: ListCriterionNotesParams,
+  options?: RequestInit,
+): Promise<CriterionNote[]> => {
+  return customFetch<CriterionNote[]>(getListCriterionNotesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCriterionNotesQueryKey = (
+  params?: ListCriterionNotesParams,
+) => {
+  return [
+    `/api/assessment-criterion-notes`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListCriterionNotesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCriterionNotes>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListCriterionNotesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCriterionNotes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListCriterionNotesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listCriterionNotes>>
+  > = ({ signal }) => listCriterionNotes(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCriterionNotes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCriterionNotesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCriterionNotes>>
+>;
+export type ListCriterionNotesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List criterion notes for an assessment
+ */
+
+export function useListCriterionNotes<
+  TData = Awaited<ReturnType<typeof listCriterionNotes>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListCriterionNotesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCriterionNotes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCriterionNotesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a note or evidence comment to an assessment criterion
+ */
+export const getCreateCriterionNoteUrl = () => {
+  return `/api/assessment-criterion-notes`;
+};
+
+export const createCriterionNote = async (
+  createCriterionNoteBody: CreateCriterionNoteBody,
+  options?: RequestInit,
+): Promise<CriterionNote> => {
+  return customFetch<CriterionNote>(getCreateCriterionNoteUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createCriterionNoteBody),
+  });
+};
+
+export const getCreateCriterionNoteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCriterionNote>>,
+    TError,
+    { data: BodyType<CreateCriterionNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createCriterionNote>>,
+  TError,
+  { data: BodyType<CreateCriterionNoteBody> },
+  TContext
+> => {
+  const mutationKey = ["createCriterionNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createCriterionNote>>,
+    { data: BodyType<CreateCriterionNoteBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createCriterionNote(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateCriterionNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createCriterionNote>>
+>;
+export type CreateCriterionNoteMutationBody = BodyType<CreateCriterionNoteBody>;
+export type CreateCriterionNoteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a note or evidence comment to an assessment criterion
+ */
+export const useCreateCriterionNote = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCriterionNote>>,
+    TError,
+    { data: BodyType<CreateCriterionNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createCriterionNote>>,
+  TError,
+  { data: BodyType<CreateCriterionNoteBody> },
+  TContext
+> => {
+  return useMutation(getCreateCriterionNoteMutationOptions(options));
 };
 
 /**

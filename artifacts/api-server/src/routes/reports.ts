@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable, companiesTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable } from "@workspace/db";
-import { eq, and, count, sql } from "drizzle-orm";
+import { usersTable, companiesTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable, criterionNotesTable } from "@workspace/db";
+import { eq, and, count, sql, inArray } from "drizzle-orm";
 import {
   GetCompanyReportResponse,
   GetCompanyReportExportParams,
@@ -20,6 +20,7 @@ import {
   type ReportAudience,
   type ReportTemplate,
 } from "../lib/reportComposition";
+import { formatCriterionNote } from "../lib/criterionNotes";
 
 const router: IRouter = Router();
 
@@ -77,6 +78,13 @@ async function buildCompanyReport(companyId: number) {
 
   const assessmentCycles = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, companyId)).orderBy(assessmentCyclesTable.createdAt);
   const companyActions = await db.select().from(actionsTable).where(eq(actionsTable.companyId, companyId));
+  const companyNotes = await db.select().from(criterionNotesTable).where(eq(criterionNotesTable.companyId, companyId));
+  const noteAuthorIds = [...new Set(companyNotes.map((note: any) => note.authorUserId))];
+  const noteAuthors = noteAuthorIds.length > 0
+    ? await db.select().from(usersTable).where(inArray(usersTable.id, noteAuthorIds))
+    : [];
+  const noteAuthorById = new Map(noteAuthors.map((author: any) => [author.id, author]));
+  const notesFormatted = companyNotes.map((note: any) => formatCriterionNote(note, noteAuthorById.get(note.authorUserId)));
 
   const cyclesFormatted = await Promise.all(assessmentCycles.map(async (cycle: any) => {
     const assignees = await db.select().from(assessmentAssigneesTable).where(eq(assessmentAssigneesTable.assessmentId, cycle.id));
@@ -125,6 +133,7 @@ async function buildCompanyReport(companyId: number) {
       assessmentName: latestCycle.name,
       userScores: [],
       aggregateScores: domainScores,
+      criterionNotes: notesFormatted.filter((note: any) => note.assessmentId === latestCycle.id),
     };
   }
 
@@ -134,6 +143,7 @@ async function buildCompanyReport(companyId: number) {
     latestResults,
     progressData: { cycles: progressCycles },
     actions: actionsFormatted,
+    criterionNotes: notesFormatted,
   });
 }
 

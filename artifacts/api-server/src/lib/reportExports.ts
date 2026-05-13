@@ -131,6 +131,7 @@ function buildCompanyReportWorkbook(composition: ReportComposition) {
         ["Overall score", composition.maturityOverview.overallScore ?? ""],
         ["Completed assessments", composition.coverSummary.completedAssessments],
         ["Open actions", composition.coverSummary.openActions],
+        ["Evidence notes", composition.coverSummary.evidenceNotes],
         ["Executive summary", composition.executiveSummary.headline],
       ],
     },

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable, assessmentCyclesTable, assessmentAssigneesTable, scoresTable, criteriaTable, categoriesTable, domainsTable } from "@workspace/db";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { usersTable, assessmentCyclesTable, assessmentAssigneesTable, scoresTable, criteriaTable, categoriesTable, domainsTable, criterionNotesTable } from "@workspace/db";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   ListAssessmentsResponse,
   CreateAssessmentBody,
@@ -15,6 +15,7 @@ import {
   GetAssessmentResultsResponse,
   ListAssessmentsQueryParams,
 } from "@workspace/api-zod";
+import { formatCriterionNote } from "../lib/criterionNotes";
 import { requireAuth } from "./auth";
 
 const router: IRouter = Router();
@@ -197,6 +198,7 @@ router.get("/assessments/:id/results", requireAuth, async (req: any, res): Promi
   const allCategories = await db.select().from(categoriesTable);
   const allCriteria = await db.select().from(criteriaTable);
   const allScores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, params.data.id));
+  const allCriterionNotes = await db.select().from(criterionNotesTable).where(eq(criterionNotesTable.assessmentId, params.data.id));
 
   const criterionToDomain: Record<number, { domainId: number; domainName: string }> = {};
   const categoryMap: Record<number, number> = {};
@@ -211,6 +213,11 @@ router.get("/assessments/:id/results", requireAuth, async (req: any, res): Promi
   const usersInAssessment = userIds.length > 0
     ? await db.select().from(usersTable).where(inArray(usersTable.id, userIds))
     : [];
+  const noteAuthorIds = [...new Set(allCriterionNotes.map((note: any) => note.authorUserId))];
+  const noteAuthors = noteAuthorIds.length > 0
+    ? await db.select().from(usersTable).where(inArray(usersTable.id, noteAuthorIds))
+    : [];
+  const noteAuthorById = new Map(noteAuthors.map((author: any) => [author.id, author]));
 
   const userScores = usersInAssessment.map((u: any) => {
     const userScoreList = allScores.filter(s => s.userId === u.id);
@@ -270,6 +277,7 @@ router.get("/assessments/:id/results", requireAuth, async (req: any, res): Promi
     assessmentName: cycle.name,
     userScores,
     aggregateScores,
+    criterionNotes: allCriterionNotes.map((note: any) => formatCriterionNote(note, noteAuthorById.get(note.authorUserId))),
   }));
 });
 

@@ -401,6 +401,19 @@ export const GetAssessmentResultsResponse = zod.object({
       band: zod.string().nullish(),
     }),
   ),
+  criterionNotes: zod.array(
+    zod.object({
+      id: zod.number(),
+      companyId: zod.number(),
+      assessmentId: zod.number(),
+      criterionId: zod.number(),
+      authorUserId: zod.number(),
+      authorName: zod.string(),
+      note: zod.string(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
 });
 
 /**
@@ -448,6 +461,39 @@ export const SubmitScoresResponseItem = zod.object({
   updatedAt: zod.string(),
 });
 export const SubmitScoresResponse = zod.array(SubmitScoresResponseItem);
+
+/**
+ * @summary List criterion notes for an assessment
+ */
+export const ListCriterionNotesQueryParams = zod.object({
+  assessmentId: zod.coerce.number(),
+  criterionId: zod.coerce.number().nullish(),
+});
+
+export const ListCriterionNotesResponseItem = zod.object({
+  id: zod.number(),
+  companyId: zod.number(),
+  assessmentId: zod.number(),
+  criterionId: zod.number(),
+  authorUserId: zod.number(),
+  authorName: zod.string(),
+  note: zod.string(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListCriterionNotesResponse = zod.array(
+  ListCriterionNotesResponseItem,
+);
+
+/**
+ * @summary Add a note or evidence comment to an assessment criterion
+ */
+
+export const CreateCriterionNoteBody = zod.object({
+  assessmentId: zod.number(),
+  criterionId: zod.number(),
+  note: zod.string().min(1),
+});
 
 /**
  * @summary Get radar/spider chart data for one or more users/cycles
@@ -710,6 +756,19 @@ export const GetCompanyReportResponse = zod.object({
           band: zod.string().nullish(),
         }),
       ),
+      criterionNotes: zod.array(
+        zod.object({
+          id: zod.number(),
+          companyId: zod.number(),
+          assessmentId: zod.number(),
+          criterionId: zod.number(),
+          authorUserId: zod.number(),
+          authorName: zod.string(),
+          note: zod.string(),
+          createdAt: zod.coerce.date(),
+          updatedAt: zod.coerce.date(),
+        }),
+      ),
     })
     .optional(),
   progressData: zod.object({
@@ -745,6 +804,19 @@ export const GetCompanyReportResponse = zod.object({
       completedDate: zod.string().nullish(),
       createdAt: zod.string(),
       updatedAt: zod.string(),
+    }),
+  ),
+  criterionNotes: zod.array(
+    zod.object({
+      id: zod.number(),
+      companyId: zod.number(),
+      assessmentId: zod.number(),
+      criterionId: zod.number(),
+      authorUserId: zod.number(),
+      authorName: zod.string(),
+      note: zod.string(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
     }),
   ),
 });
