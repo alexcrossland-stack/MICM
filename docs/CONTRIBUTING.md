@@ -33,6 +33,8 @@ Frontend smoke coverage is also included in Vitest. It renders key pages with mo
 pnpm run test:frontend-smoke
 ```
 
+Audit log events are recorded server-side for admin and security-relevant mutations. Keep metadata minimal and safe: include IDs, event context, status/role transitions, and boolean flags, but never include credential material, auth headers, browser auth identifiers, invite links, or unnecessary personal data.
+
 ---
 
 ## Manual Smoke Test Checklist

@@ -11,6 +11,7 @@ import {
   ListCompanyUsersParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -89,6 +90,19 @@ router.patch("/users/:id", requireAuth, async (req: any, res): Promise<void> => 
   if (parsed.data.isActive != null) updates.isActive = parsed.data.isActive;
 
   const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, params.data.id)).returning();
+  if (updates.role != null && targetUser.role !== user.role) {
+    await recordAuditEvent(req, {
+      currentUser,
+      eventType: "user.role_changed",
+      companyId: user.companyId ?? targetUser.companyId ?? null,
+      targetType: "user",
+      targetId: user.id,
+      metadata: {
+        previousRole: targetUser.role,
+        nextRole: user.role,
+      },
+    });
+  }
   res.json(GetUserResponse.parse(formatUser(user)));
 });
 

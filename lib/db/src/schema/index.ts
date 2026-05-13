@@ -7,3 +7,4 @@ export * from "./scores";
 export * from "./criterionNotes";
 export * from "./actions";
 export * from "./targets";
+export * from "./auditLogs";

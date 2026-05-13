@@ -4,6 +4,7 @@ import { maturityTargetsTable, domainsTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "./auth";
 import { ListTargetsQueryParams, UpsertTargetParams, UpsertTargetBody } from "@workspace/api-zod";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -85,6 +86,20 @@ router.put("/targets/:companyId/:domainId", requireAuth, async (req: any, res): 
       },
     })
     .returning();
+
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "target.upserted",
+    companyId,
+    targetType: "maturity_target",
+    targetId: result.id,
+    metadata: {
+      domainId,
+      targetScore: result.targetScore,
+      hasTargetDate: Boolean(result.targetDate),
+      hasNotes: Boolean(result.notes),
+    },
+  });
 
   res.json(formatTarget(result, domain.name));
 });

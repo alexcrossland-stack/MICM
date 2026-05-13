@@ -9,6 +9,25 @@ export interface HealthStatus {
   status: string;
 }
 
+export type AuditLogMetadata = { [key: string]: unknown };
+
+export interface AuditLog {
+  id: number;
+  /** @nullable */
+  actorUserId?: number | null;
+  /** @nullable */
+  actorClerkUserId?: string | null;
+  /** @nullable */
+  actorRole?: string | null;
+  /** @nullable */
+  companyId?: number | null;
+  eventType: string;
+  targetType: string;
+  targetId: string;
+  metadata: AuditLogMetadata;
+  createdAt: string;
+}
+
 export interface Company {
   id: number;
   name: string;
@@ -664,4 +683,14 @@ export type GetCrossCompanyRadarParams = {
 
 export type ListTargetsParams = {
   companyId?: number;
+};
+
+export type ListAuditLogsParams = {
+  companyId?: number;
+  eventType?: string;
+  /**
+   * @minimum 1
+   * @maximum 500
+   */
+  limit?: number;
 };

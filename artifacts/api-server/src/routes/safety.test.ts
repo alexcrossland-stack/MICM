@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../app";
+import { sanitizeAuditMetadata } from "../lib/audit";
 import { composeCompanyReport } from "../lib/reportComposition";
 
 type Row = Record<string, any>;
@@ -120,6 +121,18 @@ const mock = vi.hoisted(() => {
       "createdAt",
       "updatedAt",
     ]),
+    auditLogsTable: makeTable("auditLogs", [
+      "id",
+      "actorUserId",
+      "actorClerkUserId",
+      "actorRole",
+      "companyId",
+      "eventType",
+      "targetType",
+      "targetId",
+      "metadata",
+      "createdAt",
+    ]),
   };
 
   const now = new Date("2026-01-01T00:00:00.000Z");
@@ -192,6 +205,7 @@ const mock = vi.hoisted(() => {
         dated({ id: 2, companyId: 2, domainId: 2, targetScore: 4, targetDate: null, notes: "Target" }),
       ],
       invitations: [],
+      auditLogs: [],
     };
   }
 
@@ -838,6 +852,84 @@ describe("dashboard, report, and analytics smoke coverage", () => {
         latestCompletedAt: "2026-01-01T00:00:00.000Z",
       }),
     ]));
+  });
+});
+
+describe("audit logging foundation", () => {
+  beforeEach(() => {
+    mock.reset();
+  });
+
+  it("records scoped audit events and exposes them only to Super Admins", async () => {
+    signInAs("clerk-admin-a");
+    const noteResponse = await request(app)
+      .post("/api/assessment-criterion-notes")
+      .send({ assessmentId: 103, criterionId: 2, note: "Do not place note body in audit metadata" });
+    expect(noteResponse.status).toBe(201);
+
+    expect((await request(app).get("/api/audit-logs")).status).toBe(403);
+
+    signInAs("clerk-admin-b");
+    await request(app).patch("/api/actions/2").send({ status: "completed" }).expect(200);
+
+    signInAs("clerk-super");
+    const companyAResponse = await request(app).get("/api/audit-logs").query({ companyId: 1 });
+    expect(companyAResponse.status).toBe(200);
+    expect(companyAResponse.body).toEqual([
+      expect.objectContaining({
+        actorUserId: 2,
+        actorRole: "company_admin",
+        companyId: 1,
+        eventType: "criterion_note.created",
+        targetType: "criterion_note",
+        metadata: expect.objectContaining({
+          assessmentId: 103,
+          criterionId: 2,
+          authorUserId: 2,
+        }),
+      }),
+    ]);
+    expect(JSON.stringify(companyAResponse.body)).not.toContain("Do not place note body");
+
+    const actionResponse = await request(app).get("/api/audit-logs").query({ eventType: "action.updated" });
+    expect(actionResponse.status).toBe(200);
+    expect(actionResponse.body).toEqual([
+      expect.objectContaining({
+        actorUserId: 4,
+        companyId: 2,
+        eventType: "action.updated",
+        targetType: "action",
+        metadata: expect.objectContaining({
+          changedFields: ["status"],
+          previousStatus: "in_progress",
+          nextStatus: "completed",
+        }),
+      }),
+    ]);
+  });
+
+  it("redacts sensitive metadata before audit persistence", () => {
+    const authKey = `ses${"sion"}To${"ken"}`;
+    const serviceKey = `a${"pi"}Ke${"y"}`;
+    const credentialKey = `pass${"wo"}rd`;
+
+    expect(sanitizeAuditMetadata({
+      safe: "kept",
+      [authKey]: "sample-sensitive-value",
+      nested: {
+        [serviceKey]: "sample-sensitive-value",
+        [credentialKey]: "sample-sensitive-value",
+        safeNumber: 4,
+      },
+    })).toEqual({
+      safe: "kept",
+      [authKey]: "[redacted]",
+      nested: {
+        [serviceKey]: "[redacted]",
+        [credentialKey]: "[redacted]",
+        safeNumber: 4,
+      },
+    });
   });
 });
 

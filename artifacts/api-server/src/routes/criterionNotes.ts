@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { formatCriterionNote } from "../lib/criterionNotes";
 import { requireAuth } from "./auth";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -87,6 +88,19 @@ router.post("/assessment-criterion-notes", requireAuth, async (req: any, res): P
     authorUserId: currentUser.id,
     note,
   }).returning();
+
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "criterion_note.created",
+    companyId: access.cycle.companyId,
+    targetType: "criterion_note",
+    targetId: saved.id,
+    metadata: {
+      assessmentId: saved.assessmentId,
+      criterionId: saved.criterionId,
+      authorUserId: saved.authorUserId,
+    },
+  });
 
   res.status(201).json(ListCriterionNotesResponse.parse([formatCriterionNote(saved, currentUser)])[0]);
 });
