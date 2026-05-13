@@ -1005,3 +1005,33 @@ export const GetProgrammeIntelligenceResponse = zod.object({
   ),
   domains: zod.array(zod.string()),
 });
+
+/**
+ * @summary List audit log entries (Super Admin only)
+ */
+export const listAuditLogsQueryLimitDefault = 100;
+export const listAuditLogsQueryLimitMax = 500;
+
+export const ListAuditLogsQueryParams = zod.object({
+  companyId: zod.coerce.number().optional(),
+  eventType: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(listAuditLogsQueryLimitMax)
+    .default(listAuditLogsQueryLimitDefault),
+});
+
+export const ListAuditLogsResponseItem = zod.object({
+  id: zod.number(),
+  actorUserId: zod.number().nullish(),
+  actorClerkUserId: zod.string().nullish(),
+  actorRole: zod.string().nullish(),
+  companyId: zod.number().nullish(),
+  eventType: zod.string(),
+  targetType: zod.string(),
+  targetId: zod.string(),
+  metadata: zod.record(zod.string(), zod.unknown()),
+  createdAt: zod.string(),
+});
+export const ListAuditLogsResponse = zod.array(ListAuditLogsResponseItem);

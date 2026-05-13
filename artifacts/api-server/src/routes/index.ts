@@ -13,6 +13,7 @@ import reportsRouter from "./reports";
 import targetsRouter from "./targets";
 import programmeRouter from "./programme";
 import demoRouter from "./demo";
+import auditLogsRouter from "./auditLogs";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(domainsRouter);
 router.use(reportsRouter);
 router.use(targetsRouter);
 router.use(programmeRouter);
+router.use(auditLogsRouter);
 
 export default router;

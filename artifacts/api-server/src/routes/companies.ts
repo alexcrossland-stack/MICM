@@ -14,6 +14,7 @@ import {
   GetMyCompanyResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -54,6 +55,19 @@ router.post("/companies", requireAuth, async (req: any, res): Promise<void> => {
     return;
   }
   const [company] = await db.insert(companiesTable).values(parsed.data).returning();
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "company.created",
+    companyId: company.id,
+    targetType: "company",
+    targetId: company.id,
+    metadata: {
+      sector: company.sector,
+      size: company.size,
+      isActive: company.isActive,
+      hasContactEmail: Boolean(company.contactEmail),
+    },
+  });
   res.status(201).json(GetCompanyResponse.parse(formatCompany(company)));
 });
 
@@ -114,6 +128,17 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
 
   const [company] = await db.update(companiesTable).set(updates).where(eq(companiesTable.id, params.data.id)).returning();
   if (!company) { res.status(404).json({ error: "Company not found" }); return; }
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "company.updated",
+    companyId: company.id,
+    targetType: "company",
+    targetId: company.id,
+    metadata: {
+      changedFields: Object.keys(updates).filter((field) => field !== "contactEmail"),
+      contactEmailChanged: Object.prototype.hasOwnProperty.call(updates, "contactEmail"),
+    },
+  });
   res.json(GetCompanyResponse.parse(formatCompany(company)));
 });
 

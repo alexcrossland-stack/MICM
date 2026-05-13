@@ -15,6 +15,13 @@
       "when": 1778653034030,
       "tag": "0001_kind_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778694351119,
+      "tag": "0002_young_toxin",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import {
   ListInvitationsQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -75,6 +76,19 @@ router.post("/invitations", requireAuth, async (req: any, res): Promise<void> =>
     expiresAt,
   }).returning();
 
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "invitation.created",
+    companyId,
+    targetType: "invitation",
+    targetId: invitation.id,
+    metadata: {
+      role: invitation.role,
+      status: invitation.status,
+      hasEmail: Boolean(invitation.email),
+    },
+  });
+
   res.status(201).json(formatInvitation(invitation));
 });
 
@@ -111,6 +125,17 @@ router.post("/invitations/accept", requireAuth, async (req: any, res): Promise<v
 
   // Mark invitation as accepted
   await db.update(invitationsTable).set({ status: "accepted" }).where(eq(invitationsTable.id, invitation.id));
+  await recordAuditEvent(req, {
+    currentUser: user,
+    eventType: "invitation.accepted",
+    companyId: invitation.companyId,
+    targetType: "invitation",
+    targetId: invitation.id,
+    metadata: {
+      role: invitation.role,
+      createdUser: !existingUser,
+    },
+  });
 
   res.json(AcceptInvitationResponse.parse({
     id: user.id,

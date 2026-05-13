@@ -21,6 +21,7 @@ import {
   type ReportTemplate,
 } from "../lib/reportComposition";
 import { formatCriterionNote } from "../lib/criterionNotes";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -190,6 +191,18 @@ router.get("/reports/company/:id/export", requireAuth, async (req: any, res): Pr
     composition,
     query.data.format as CompanyReportExportFormat,
   );
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "report.exported",
+    companyId: params.data.id,
+    targetType: "company_report",
+    targetId: params.data.id,
+    metadata: {
+      format: query.data.format,
+      template: query.data.template,
+      audience,
+    },
+  });
   res.setHeader("Content-Type", exportResult.contentType);
   res.setHeader("Content-Disposition", `attachment; filename="${exportResult.fileName}"`);
   res.status(200).send(exportResult.body);

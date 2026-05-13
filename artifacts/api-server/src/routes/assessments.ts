@@ -17,6 +17,7 @@ import {
 } from "@workspace/api-zod";
 import { formatCriterionNote } from "../lib/criterionNotes";
 import { requireAuth } from "./auth";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -223,6 +224,19 @@ router.patch("/assessments/:id", requireAuth, async (req: any, res): Promise<voi
 
   const [cycle] = await db.update(assessmentCyclesTable).set(updates).where(eq(assessmentCyclesTable.id, params.data.id)).returning();
   if (!cycle) { res.status(404).json({ error: "Assessment not found" }); return; }
+  if (updates.status != null && existingCycle.status !== cycle.status) {
+    await recordAuditEvent(req, {
+      currentUser,
+      eventType: "assessment.status_changed",
+      companyId: cycle.companyId,
+      targetType: "assessment",
+      targetId: cycle.id,
+      metadata: {
+        previousStatus: existingCycle.status,
+        nextStatus: cycle.status,
+      },
+    });
+  }
   res.json(GetAssessmentResponse.parse(await buildAssessmentCycle(cycle)));
 });
 

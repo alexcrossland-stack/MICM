@@ -15,6 +15,7 @@ import {
   GetActionsSummaryQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
+import { recordAuditEvent } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -125,6 +126,21 @@ router.post("/actions", requireAuth, async (req: any, res): Promise<void> => {
     dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
   }).returning();
 
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "action.created",
+    companyId: action.companyId,
+    targetType: "action",
+    targetId: action.id,
+    metadata: {
+      assessmentId: action.assessmentId,
+      domainId: action.domainId,
+      priority: action.priority,
+      assignedUserId: action.assignedUserId ?? null,
+      hasDueDate: Boolean(action.dueDate),
+    },
+  });
+
   res.status(201).json(GetActionResponse.parse(formatAction(action)));
 });
 
@@ -173,7 +189,23 @@ router.patch("/actions/:id", requireAuth, async (req: any, res): Promise<void> =
   if (parsed.data.dueDate !== undefined) updates.dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
   if (parsed.data.completedDate !== undefined) updates.completedDate = parsed.data.completedDate ? new Date(parsed.data.completedDate) : null;
 
+  const previousStatus = existingAction.status;
+  const previousPriority = existingAction.priority;
   const [action] = await db.update(actionsTable).set(updates).where(eq(actionsTable.id, params.data.id)).returning();
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "action.updated",
+    companyId: action.companyId,
+    targetType: "action",
+    targetId: action.id,
+    metadata: {
+      changedFields: Object.keys(updates),
+      previousStatus,
+      nextStatus: action.status,
+      previousPriority,
+      nextPriority: action.priority,
+    },
+  });
   res.json(GetActionResponse.parse(formatAction(action)));
 });
 
@@ -195,6 +227,19 @@ router.delete("/actions/:id", requireAuth, async (req: any, res): Promise<void> 
   }
 
   await db.delete(actionsTable).where(eq(actionsTable.id, params.data.id));
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "action.deleted",
+    companyId: existingAction.companyId,
+    targetType: "action",
+    targetId: existingAction.id,
+    metadata: {
+      assessmentId: existingAction.assessmentId,
+      domainId: existingAction.domainId,
+      status: existingAction.status,
+      priority: existingAction.priority,
+    },
+  });
   res.sendStatus(204);
 });
 
