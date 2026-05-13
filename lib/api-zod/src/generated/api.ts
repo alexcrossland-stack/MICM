@@ -761,7 +761,7 @@ export const getCompanyReportExportQueryTemplateDefault = `board_ready`;
 
 export const GetCompanyReportExportQueryParams = zod.object({
   format: zod
-    .enum(["csv", "pdf"])
+    .enum(["csv", "pdf", "xlsx"])
     .default(getCompanyReportExportQueryFormatDefault),
   template: zod
     .enum(["board_ready", "operational_detail", "executive_summary"])

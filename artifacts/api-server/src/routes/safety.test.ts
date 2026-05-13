@@ -551,6 +551,26 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(exportResponse.text).toContain("board_ready,domain_findings,1,Acme Precision");
     expect(exportResponse.text).toContain("1,Strategy,3,Developing,3.5");
 
+    const workbookResponse = await request(app)
+      .get("/api/reports/company/1/export")
+      .query({ format: "xlsx", template: "operational_detail" })
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+    expect(workbookResponse.status).toBe(200);
+    expect(workbookResponse.headers["content-type"]).toContain("spreadsheetml.sheet");
+    expect(workbookResponse.headers["content-disposition"]).toContain("acme-precision-operational-detail-report.xlsx");
+    expect(workbookResponse.body.subarray(0, 2).toString("utf8")).toBe("PK");
+    const workbookText = workbookResponse.body.toString("utf8");
+    expect(workbookText).toContain("Summary");
+    expect(workbookText).toContain("Domain Scores");
+    expect(workbookText).toContain("Actions");
+    expect(workbookText).toContain("Strategy");
+    expect(workbookText).toContain("A action");
+
     expect((await request(app).get("/api/reports/company/2")).status).toBe(403);
     expect((await request(app).get("/api/reports/company/2/export").query({ format: "csv" })).status).toBe(403);
 
@@ -575,7 +595,7 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(executiveResponse.headers["content-disposition"]).toContain("executive-summary-only.csv");
     expect(executiveResponse.text).not.toContain("action_roadmap");
 
-    expect((await request(app).get("/api/reports/company/1/export").query({ format: "xlsx" })).status).toBe(400);
+    expect((await request(app).get("/api/reports/company/1/export").query({ format: "xls" })).status).toBe(400);
     expect((await request(app).get("/api/reports/company/1/export").query({ template: "weekly" })).status).toBe(400);
   });
 

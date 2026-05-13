@@ -698,7 +698,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [csv, pdf]
+            enum: [csv, pdf, xlsx]
             default: csv
         - name: template
           in: query
@@ -720,6 +720,10 @@ paths:
               schema:
                 type: string
             application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
                 type: string
                 format: binary

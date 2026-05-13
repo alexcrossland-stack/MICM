@@ -292,7 +292,7 @@ These credentials are only valid against the Replit development Clerk tenant and
 - **Progress over time**: line chart showing domain score trends across cycles
 - **Action summary**: open/in-progress/completed action counts per domain
 
-**Export**: company report export is available from the Reports page and `GET /api/reports/company/{id}/export`. Supported query options are `format=csv|pdf` and `template=board_ready|operational_detail|executive_summary`. Exports are composed server-side before rendering, so PDF/CSV share the same report sections. PDF output is currently groundwork only; Excel export and final PDF visual design remain backlog items (`docs/BACKLOG.md`).
+**Export**: company report export is available from the Reports page and `GET /api/reports/company/{id}/export`. Supported query options are `format=csv|pdf|xlsx` and `template=board_ready|operational_detail|executive_summary`. Exports are composed server-side before rendering, so CSV/PDF/Excel share the same report sections. PDF output is currently groundwork only; final PDF visual design remains a backlog item (`docs/BACKLOG.md`).
 
 ---
 
