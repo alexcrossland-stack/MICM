@@ -94,30 +94,25 @@ function buildCompanyReportCsv(composition: ReportComposition) {
 }
 
 function buildCompanyReportPdf(composition: ReportComposition) {
-  const lines = [
-    "MICM Maturity Report",
-    composition.templateLabel,
-    composition.coverSummary.companyName,
-    composition.executiveSummary.headline,
-    ...composition.executiveSummary.bullets,
+  const pages = [
+    buildPdfCoverPage(composition),
+    buildPdfExecutiveSummaryPage(composition),
   ];
+
   if (composition.includedSections.includes("maturity_overview")) {
-    lines.push(`Overall score: ${composition.maturityOverview.overallScore ?? "Not available"}`);
+    pages.push(buildPdfMaturityOverviewPage(composition));
   }
   if (composition.includedSections.includes("domain_findings")) {
-    lines.push("Domain findings", ...composition.domainFindings.map((finding) => finding.finding));
+    pages.push(buildPdfDomainFindingsPage(composition));
   }
   if (composition.includedSections.includes("action_roadmap")) {
-    lines.push(
-      "Action roadmap",
-      ...composition.actionRoadmap.priorityActions.map((action) => `${action.priority}: ${action.title} (${action.status})`),
-    );
+    pages.push(buildPdfActionAndEvidencePage(composition));
   }
   if (composition.includedSections.includes("benchmarking")) {
-    lines.push("Benchmarking", composition.benchmarking.summary);
+    pages.push(buildPdfBenchmarkingPage(composition));
   }
 
-  return buildSimplePdf(lines);
+  return buildStyledPdf(pages);
 }
 
 function buildCompanyReportWorkbook(composition: ReportComposition) {
@@ -271,19 +266,212 @@ function buildZip(files: Map<string, string>) {
   return Buffer.concat([...localParts, centralDirectory, endRecord]);
 }
 
-function buildSimplePdf(lines: string[]) {
-  const contentLines = lines.slice(0, 42).map((line, index) => {
-    const y = 760 - index * 16;
-    return `BT /F1 10 Tf 50 ${y} Td (${escapePdfText(line)}) Tj ET`;
-  });
-  const stream = contentLines.join("\n");
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`,
+type PdfCommand = string;
+type PdfColor = [number, number, number];
+
+const PDF_PAGE_WIDTH = 612;
+const PDF_PAGE_HEIGHT = 792;
+const PDF_MARGIN_X = 46;
+const PDF_DARK_BLUE: PdfColor = [0.04, 0.14, 0.28];
+const PDF_BLUE: PdfColor = [0.08, 0.28, 0.52];
+const PDF_TEAL: PdfColor = [0.05, 0.48, 0.52];
+const PDF_GREEN: PdfColor = [0.12, 0.52, 0.34];
+const PDF_ORANGE: PdfColor = [0.85, 0.42, 0.12];
+const PDF_LIGHT_BLUE: PdfColor = [0.9, 0.95, 0.98];
+const PDF_LIGHT_GREY: PdfColor = [0.95, 0.96, 0.97];
+const PDF_TEXT: PdfColor = [0.1, 0.12, 0.16];
+const PDF_MUTED: PdfColor = [0.38, 0.43, 0.5];
+const PDF_WHITE: PdfColor = [1, 1, 1];
+
+function buildPdfCoverPage(composition: ReportComposition): PdfCommand[] {
+  const commands: PdfCommand[] = [
+    rect(0, 0, PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_DARK_BLUE),
+    rect(0, 0, 18, PDF_PAGE_HEIGHT, PDF_TEAL),
+    rect(420, 0, 192, PDF_PAGE_HEIGHT, [0.07, 0.2, 0.38]),
+    text("MICM Maturity Hub", 54, 724, 13, "bold", PDF_WHITE),
+    text(composition.templateLabel, 54, 672, 25, "bold", PDF_WHITE),
+    text(composition.coverSummary.companyName, 54, 638, 18, "regular", PDF_WHITE),
+    text("Board-ready maturity report generated from assessed MICM data.", 54, 606, 11, "regular", [0.86, 0.92, 0.96]),
   ];
+
+  metricCard(commands, 54, 470, "Overall score", scoreText(composition.maturityOverview.overallScore));
+  metricCard(commands, 214, 470, "Completed assessments", String(composition.coverSummary.completedAssessments));
+  metricCard(commands, 374, 470, "Open actions", String(composition.coverSummary.openActions));
+  metricCard(commands, 54, 360, "Evidence notes", String(composition.coverSummary.evidenceNotes));
+  metricCard(commands, 214, 360, "Latest assessment", composition.coverSummary.latestAssessmentName ?? "Not available");
+  metricCard(commands, 374, 360, "Sector", composition.coverSummary.sector ?? "Not provided");
+
+  addWrappedText(
+    commands,
+    composition.executiveSummary.headline,
+    54,
+    250,
+    72,
+    15,
+    12,
+    "regular",
+    [0.9, 0.95, 0.98],
+  );
+  commands.push(text("Confidential board pack", 54, 70, 10, "regular", [0.7, 0.78, 0.86]));
+  return commands;
+}
+
+function buildPdfExecutiveSummaryPage(composition: ReportComposition): PdfCommand[] {
+  const commands = pageScaffold("Executive summary", composition);
+  let y = 656;
+  commands.push(text(composition.executiveSummary.headline, PDF_MARGIN_X, y, 14, "bold", PDF_TEXT));
+  y -= 34;
+  for (const bullet of composition.executiveSummary.bullets) {
+    y = bulletText(commands, bullet, PDF_MARGIN_X, y);
+  }
+  return commands;
+}
+
+function buildPdfMaturityOverviewPage(composition: ReportComposition): PdfCommand[] {
+  const commands = pageScaffold("Maturity overview", composition);
+  commands.push(text("Overall score", PDF_MARGIN_X, 656, 11, "bold", PDF_MUTED));
+  commands.push(text(scoreText(composition.maturityOverview.overallScore), PDF_MARGIN_X, 620, 32, "bold", PDF_BLUE));
+  commands.push(text("Score scale: 0 traditional baseline to 4 excellence.", PDF_MARGIN_X, 594, 10, "regular", PDF_MUTED));
+
+  let y = 540;
+  for (const domain of composition.maturityOverview.domainScores.slice(0, 8)) {
+    const score = domain.score ?? 0;
+    commands.push(text(domain.domainName, PDF_MARGIN_X, y + 4, 10, "bold", PDF_TEXT));
+    commands.push(rect(236, y, 230, 10, PDF_LIGHT_GREY));
+    commands.push(rect(236, y, Math.max(0, Math.min(4, score)) * 57.5, 10, scoreColor(domain.score ?? null)));
+    commands.push(text(domain.score == null ? "Not scored" : `${domain.score.toFixed(1)} / 4`, 484, y + 1, 9, "regular", PDF_TEXT));
+    y -= 32;
+  }
+  return commands;
+}
+
+function buildPdfDomainFindingsPage(composition: ReportComposition): PdfCommand[] {
+  const commands = pageScaffold("Domain findings", composition);
+  let y = 656;
+  for (const finding of composition.domainFindings.slice(0, 10)) {
+    commands.push(rect(PDF_MARGIN_X, y - 8, 520, 1, PDF_LIGHT_GREY));
+    commands.push(text(finding.domainName, PDF_MARGIN_X, y, 11, "bold", PDF_TEXT));
+    commands.push(text(finding.score == null ? "Not scored" : `${finding.score.toFixed(1)} / 4 - ${finding.band ?? "Unbanded"}`, 420, y, 9, "regular", scoreColor(finding.score ?? null)));
+    y = addWrappedText(commands, finding.finding, PDF_MARGIN_X, y - 18, 86, 13, 9, "regular", PDF_MUTED) - 10;
+    if (y < 110) break;
+  }
+  return commands;
+}
+
+function buildPdfActionAndEvidencePage(composition: ReportComposition): PdfCommand[] {
+  const commands = pageScaffold("Action roadmap", composition);
+  commands.push(text(`${composition.actionRoadmap.totalActions} total actions`, PDF_MARGIN_X, 656, 12, "bold", PDF_TEXT));
+  commands.push(text(statusSummary(composition.actionRoadmap.byStatus), PDF_MARGIN_X, 636, 10, "regular", PDF_MUTED));
+
+  let y = 596;
+  if (composition.actionRoadmap.priorityActions.length === 0) {
+    commands.push(text("No open priority actions are currently listed.", PDF_MARGIN_X, y, 10, "regular", PDF_MUTED));
+    y -= 34;
+  } else {
+    for (const action of composition.actionRoadmap.priorityActions.slice(0, 6)) {
+      commands.push(text(`${action.priority.toUpperCase()} - ${action.title}`, PDF_MARGIN_X, y, 10, "bold", PDF_TEXT));
+      commands.push(text(`Status: ${action.status}${action.dueDate ? ` | Due: ${action.dueDate.slice(0, 10)}` : ""}`, PDF_MARGIN_X, y - 16, 9, "regular", PDF_MUTED));
+      y -= 44;
+      if (y < 350) break;
+    }
+  }
+
+  commands.push(text("Evidence notes", PDF_MARGIN_X, 316, 16, "bold", PDF_TEXT));
+  commands.push(text(`${composition.evidenceNotes.totalNotes} criterion evidence notes are available for review context.`, PDF_MARGIN_X, 294, 10, "regular", PDF_MUTED));
+  y = 260;
+  if (composition.evidenceNotes.preview.length === 0) {
+    commands.push(text("No evidence notes have been added yet.", PDF_MARGIN_X, y, 10, "regular", PDF_MUTED));
+  } else {
+    for (const note of composition.evidenceNotes.preview.slice(0, 4)) {
+      commands.push(text(`${note.authorName} | ${note.createdAt}`, PDF_MARGIN_X, y, 9, "bold", PDF_TEXT));
+      y = addWrappedText(commands, note.note, PDF_MARGIN_X, y - 15, 88, 12, 9, "regular", PDF_MUTED) - 8;
+      if (y < 86) break;
+    }
+  }
+  return commands;
+}
+
+function buildPdfBenchmarkingPage(composition: ReportComposition): PdfCommand[] {
+  const commands = pageScaffold("Benchmarking", composition);
+  commands.push(text(composition.benchmarking.available ? "Super Admin benchmarking context" : "Benchmarking unavailable", PDF_MARGIN_X, 656, 14, "bold", PDF_TEXT));
+  addWrappedText(commands, composition.benchmarking.summary, PDF_MARGIN_X, 624, 90, 14, 10, "regular", PDF_MUTED);
+  commands.push(rect(PDF_MARGIN_X, 510, 520, 92, PDF_LIGHT_BLUE));
+  commands.push(text("Future cohort comparison", PDF_MARGIN_X + 20, 566, 12, "bold", PDF_BLUE));
+  addWrappedText(
+    commands,
+    "This section is reserved for peer comparison, cohort ranges, and programme-level benchmarks when the data model captures those dimensions.",
+    PDF_MARGIN_X + 20,
+    544,
+    76,
+    13,
+    9,
+    "regular",
+    PDF_MUTED,
+  );
+  return commands;
+}
+
+function pageScaffold(title: string, composition: ReportComposition): PdfCommand[] {
+  return [
+    rect(0, 0, PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_WHITE),
+    rect(0, 742, PDF_PAGE_WIDTH, 50, PDF_DARK_BLUE),
+    rect(0, 742, 18, 50, PDF_TEAL),
+    text("MICM Maturity Hub", PDF_MARGIN_X, 760, 10, "bold", PDF_WHITE),
+    text(composition.coverSummary.companyName, 410, 760, 9, "regular", [0.86, 0.92, 0.96]),
+    text(title, PDF_MARGIN_X, 694, 22, "bold", PDF_TEXT),
+    rect(PDF_MARGIN_X, 676, 520, 1, PDF_LIGHT_GREY),
+    text(composition.templateLabel, PDF_MARGIN_X, 38, 8, "regular", PDF_MUTED),
+  ];
+}
+
+function metricCard(commands: PdfCommand[], x: number, y: number, label: string, value: string) {
+  commands.push(rect(x, y, 138, 74, [0.11, 0.27, 0.45]));
+  commands.push(text(label, x + 12, y + 48, 8, "regular", [0.74, 0.84, 0.92]));
+  addWrappedText(commands, value, x + 12, y + 26, 18, 11, 13, "bold", PDF_WHITE);
+}
+
+function bulletText(commands: PdfCommand[], value: string, x: number, y: number) {
+  commands.push(rect(x, y - 2, 5, 5, PDF_TEAL));
+  return addWrappedText(commands, value, x + 16, y, 84, 15, 10, "regular", PDF_TEXT) - 7;
+}
+
+function addWrappedText(
+  commands: PdfCommand[],
+  value: string,
+  x: number,
+  y: number,
+  maxChars: number,
+  lineHeight: number,
+  size: number,
+  style: "regular" | "bold",
+  color: PdfColor,
+) {
+  let nextY = y;
+  for (const line of wrapText(value, maxChars)) {
+    commands.push(text(line, x, nextY, size, style, color));
+    nextY -= lineHeight;
+  }
+  return nextY;
+}
+
+function buildStyledPdf(pages: PdfCommand[][]) {
+  const pageObjectIds = pages.map((_, index) => 5 + index * 2);
+  const objects: string[] = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+  ];
+
+  pages.forEach((commands, index) => {
+    const pageObjectId = pageObjectIds[index];
+    const contentObjectId = pageObjectId + 1;
+    const stream = commands.join("\n");
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PDF_PAGE_WIDTH} ${PDF_PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectId} 0 R >>`,
+      `<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`,
+    );
+  });
 
   let pdf = "%PDF-1.4\n";
   const offsets: number[] = [0];
@@ -299,13 +487,66 @@ function buildSimplePdf(lines: string[]) {
   return pdf;
 }
 
+function text(value: string, x: number, y: number, size: number, style: "regular" | "bold", color: PdfColor) {
+  return `${fillColor(color)} BT /${style === "bold" ? "F2" : "F1"} ${size} Tf ${x} ${y} Td (${escapePdfText(value)}) Tj ET`;
+}
+
+function rect(x: number, y: number, width: number, height: number, color: PdfColor) {
+  return `${fillColor(color)} ${x} ${y} ${width} ${height} re f`;
+}
+
+function fillColor(color: PdfColor) {
+  return `${color.map((channel) => channel.toFixed(3)).join(" ")} rg`;
+}
+
+function wrapText(value: string, maxChars: number) {
+  const words = normalizePdfText(value).split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
+}
+
+function scoreText(score: number | null | undefined) {
+  return score == null ? "Not available" : `${score.toFixed(1)} / 4`;
+}
+
+function scoreColor(score: number | null) {
+  if (score == null) return PDF_MUTED;
+  if (score < 2) return PDF_ORANGE;
+  if (score < 3) return PDF_TEAL;
+  return PDF_GREEN;
+}
+
+function statusSummary(byStatus: Record<string, number>) {
+  const entries = Object.entries(byStatus);
+  if (entries.length === 0) return "No actions are currently recorded.";
+  return entries.map(([status, count]) => `${status}: ${count}`).join(" | ");
+}
+
 function escapeCsvCell(value: string) {
   if (!/[",\n\r]/.test(value)) return value;
   return `"${value.replace(/"/g, '""')}"`;
 }
 
 function escapePdfText(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  return normalizePdfText(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function normalizePdfText(value: string) {
+  return value
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function escapeXmlAttribute(value: string) {

@@ -51,6 +51,14 @@ export type ReportComposition = {
       dueDate: string | null | undefined;
     }>;
   };
+  evidenceNotes: {
+    totalNotes: number;
+    preview: Array<{
+      note: string;
+      authorName: string;
+      createdAt: string;
+    }>;
+  };
   benchmarking: {
     available: boolean;
     summary: string;
@@ -76,6 +84,13 @@ export function composeCompanyReport(
   const latestOverallScore = validScores.length > 0 ? round2(validScores.reduce((a, b) => a + b, 0) / validScores.length) : null;
   const openActions = report.actions.filter((action) => action.status !== "completed").length;
   const evidenceNotes = report.criterionNotes.length;
+  const evidenceNotePreview = report.criterionNotes
+    .slice(0, template === "operational_detail" ? 10 : 5)
+    .map((note) => ({
+      note: note.note,
+      authorName: note.authorName,
+      createdAt: formatDate(note.createdAt),
+    }));
   const priorityActions = report.actions
     .filter((action) => action.status !== "completed")
     .sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority))
@@ -118,6 +133,10 @@ export function composeCompanyReport(
       totalActions: report.actions.length,
       byStatus: countByStatus(report.actions),
       priorityActions,
+    },
+    evidenceNotes: {
+      totalNotes: evidenceNotes,
+      preview: evidenceNotePreview,
     },
     benchmarking: {
       available: audience === "super_admin",
@@ -198,4 +217,10 @@ function priorityRank(priority: string) {
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function formatDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
 }
