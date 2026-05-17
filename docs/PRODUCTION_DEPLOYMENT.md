@@ -125,6 +125,8 @@ PORT=8080 BASE_PATH=/ pnpm --filter @workspace/micm-platform run build
 
 On Replit, the Deploy UI handles the platform-specific build and serving steps. The migration and smoke-test responsibilities still apply.
 
+For the VPS deployment workflow that runs from GitHub Actions, see `docs/VPS_GITHUB_DEPLOYMENT.md`.
+
 ## Post-Deploy Smoke Checklist
 
 Run this checklist against production with real production test accounts or approved internal accounts. Do not use staging/demo seed data.
