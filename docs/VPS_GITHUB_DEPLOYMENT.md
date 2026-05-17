@@ -10,7 +10,8 @@ This runbook covers deploying MICM to the existing virtual server from GitHub Ac
 - Installs dependencies with the lockfile.
 - Applies committed Drizzle migrations with `pnpm --filter @workspace/db run migrate`.
 - Builds the workspace.
-- Restarts the existing PM2 apps: `micm-api` and `micm-web`.
+- Restarts `micm-api` with `PORT=3000` explicitly so the API port matches the Nginx upstream and deployment health check.
+- Restarts `micm-web` separately with the sourced production environment.
 - Runs the API health check at `http://localhost:3000/api/healthz`.
 
 Never use `pnpm --filter @workspace/db run push:dev` for this VPS. `push:dev` is only for disposable local databases.
@@ -52,7 +53,8 @@ git pull origin main
 pnpm install --frozen-lockfile
 pnpm --filter @workspace/db run migrate
 pnpm run build
-pm2 restart micm-api micm-web --update-env
+PORT=3000 pm2 restart micm-api --update-env
+pm2 restart micm-web --update-env
 pm2 save
 curl -f http://localhost:3000/api/healthz
 ```
@@ -82,10 +84,11 @@ If deployment succeeds but smoke tests fail:
 5. Run `pnpm install --frozen-lockfile`.
 6. Review whether any migrations were applied and whether the old app version is compatible with the current schema.
 7. Run `pnpm run build`.
-8. Run `pm2 restart micm-api micm-web --update-env`.
-9. Run `pm2 save`.
-10. Confirm `curl -f http://localhost:3000/api/healthz` passes.
-11. Record the rollback in the deployment notes before attempting a new deployment.
+8. Run `PORT=3000 pm2 restart micm-api --update-env`.
+9. Run `pm2 restart micm-web --update-env`.
+10. Run `pm2 save`.
+11. Confirm `curl -f http://localhost:3000/api/healthz` passes.
+12. Record the rollback in the deployment notes before attempting a new deployment.
 
 Do not manually edit production data during rollback unless there is a reviewed database recovery plan.
 
