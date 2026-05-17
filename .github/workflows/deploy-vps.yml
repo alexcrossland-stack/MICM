@@ -1,0 +1,51 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: micm-vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy main to VPS
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/micm_vps_key
+          chmod 600 ~/.ssh/micm_vps_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy application
+        env:
+          VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/micm_vps_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST" "VPS_APP_PATH=\"$VPS_APP_PATH\" bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$VPS_APP_PATH"
+          git pull origin main
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/db run migrate
+          pnpm run build
+          pm2 restart micm-api micm-web --update-env
+          pm2 save
+          curl -f http://localhost:3000/api/healthz
+          EOF
