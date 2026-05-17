@@ -43,6 +43,9 @@ jobs:
           cd "$VPS_APP_PATH"
           git pull origin main
           pnpm install --frozen-lockfile
+          set -a
+          source .env.production
+          set +a
           pnpm --filter @workspace/db run migrate
           pnpm run build
           pm2 restart micm-api micm-web --update-env
