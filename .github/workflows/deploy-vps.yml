@@ -50,5 +50,13 @@ jobs:
           pnpm run build
           pm2 restart micm-api micm-web --update-env
           pm2 save
-          curl -f http://localhost:3000/api/healthz
+          for i in {1..30}; do
+            if curl -fs http://localhost:3000/api/healthz > /dev/null; then
+              echo "Health check passed"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Health check failed"
+          exit 1
           EOF
