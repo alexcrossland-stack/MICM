@@ -48,7 +48,8 @@ jobs:
           set +a
           pnpm --filter @workspace/db run migrate
           pnpm run build
-          pm2 restart micm-api micm-web --update-env
+          PORT=3000 pm2 restart micm-api --update-env
+          pm2 restart micm-web --update-env
           pm2 save
           for i in {1..30}; do
             if curl -fs http://localhost:3000/api/healthz > /dev/null; then
