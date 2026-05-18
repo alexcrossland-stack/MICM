@@ -1,6 +1,6 @@
 # Production Readiness Gap Tracker
 
-Use this tracker to decide whether MICM Maturity Hub is ready for a production pilot or wider launch. It complements the deployment runbook in `docs/PRODUCTION_DEPLOYMENT.md`.
+Use this tracker to decide whether MICM Maturity Hub is ready for a production pilot or wider launch. It complements the deployment runbook in `docs/PRODUCTION_DEPLOYMENT.md` and the pilot onboarding guide in `docs/PILOT_ONBOARDING.md`.
 
 ## Status Summary
 
@@ -88,6 +88,7 @@ Status values:
 - [ ] Pilot companies and users are named.
 - [ ] Pilot success criteria are written down.
 - [ ] Required pilot workflows are agreed: login, assessment, evidence notes, targets, reports, exports, analytics, Programme Intelligence, and tenant isolation.
+- [ ] Pilot onboarding steps in `docs/PILOT_ONBOARDING.md` are complete.
 - [ ] Known limitations are documented for pilot users.
 - [ ] Acceptance owner is named.
 - [ ] Acceptance decision is recorded before wider rollout.
@@ -97,7 +98,7 @@ Status values:
 - [ ] First Super Admin account is created and verified.
 - [ ] Company Admin invitation process is verified.
 - [ ] Company User invitation process is verified.
-- [ ] Onboarding instructions are ready for pilot users.
+- [ ] Onboarding instructions in `docs/PILOT_ONBOARDING.md` are ready for pilot users.
 - [ ] Support contact and expected response route are included in onboarding materials.
 - [ ] Demo credentials are not used in production onboarding.
 
