@@ -79,6 +79,7 @@ Required variables:
 | `CLERK_PUBLISHABLE_KEY` | API server | Used to resolve the Clerk proxy host |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Frontend (Vite) | Must match `CLERK_PUBLISHABLE_KEY` |
 | `VITE_CLERK_PROXY_URL` | Frontend (Vite) | Empty in dev; set automatically in Replit production |
+| `CORS_ALLOWED_ORIGINS` | API server | Comma-separated production browser origins allowed for credentialed API requests; defaults to `https://app.micm-mm.com` |
 | `PORT` | API server, Vite dev server | Set by Replit workflows; set manually for local dev |
 | `BASE_PATH` | Vite dev server | `/` for root-mounted deployments |
 | `NODE_ENV` | API server | Must be `production` in live environments |

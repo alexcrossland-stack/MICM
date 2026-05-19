@@ -21,6 +21,7 @@ This runbook is for promoting MICM Maturity Hub from a validated staging environ
 | `CLERK_PUBLISHABLE_KEY` | Yes | Production Clerk publishable key from the same Clerk app |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Yes | Same production publishable key as `CLERK_PUBLISHABLE_KEY` |
 | `VITE_CLERK_PROXY_URL` | Platform-specific | Set by Replit production; for other platforms set only when Clerk JS should be proxied through the app domain |
+| `CORS_ALLOWED_ORIGINS` | Recommended | Comma-separated browser origins allowed for credentialed API requests; defaults to `https://app.micm-mm.com` if unset |
 | `PORT` | Yes | API server port exposed by the hosting platform |
 | `BASE_PATH` | Yes for frontend build/dev | `/` for root-mounted deployments |
 | `NODE_ENV` | Yes | `production` |
@@ -89,6 +90,17 @@ curl -i -X POST https://<production-host>/api/demo/sign-in-token \
 ```
 
 Expected result: HTTP 404.
+
+Confirm production CORS allows only approved browser origins:
+
+```bash
+curl -I -H "Origin: https://evil.example" https://<production-host>/api/healthz
+curl -I -H "Origin: https://app.micm-mm.com" https://<production-host>/api/healthz
+```
+
+The unapproved origin must not be reflected in `Access-Control-Allow-Origin`.
+The approved application origin should be reflected and may include credentialed
+CORS headers.
 
 ## Build And Release Steps
 
