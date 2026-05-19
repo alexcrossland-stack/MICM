@@ -71,6 +71,61 @@ Deployment sequence:
 4. Confirm the deploy job reaches the health-check step successfully.
 5. Run the smoke-test checklist below against the public URL.
 
+## Nginx Static Frontend Security Headers
+
+The repository does not own the live Nginx site file. Keep the active VPS
+configuration under `/etc/nginx/sites-available/` and manage it through the
+server change process.
+
+The frontend and static asset responses should carry the same browser hardening
+headers as the API responses. Add these headers inside the HTTPS `server` block
+that serves `app.micm-mm.com`, so they apply to `/`, `/sign-in`, static assets,
+and proxied API responses:
+
+```nginx
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+```
+
+Do not add secrets, database URLs, Clerk keys, or environment values to the Nginx
+configuration. Do not loosen the `/api` proxy, Clerk routing, demo-auth lockout,
+or CORS behavior while applying these headers.
+
+Suggested VPS commands:
+
+```bash
+sudo cp /etc/nginx/sites-available/micm /etc/nginx/sites-available/micm.$(date +%Y%m%d%H%M%S).bak
+sudo nano /etc/nginx/sites-available/micm
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+If the active site file has a different name, identify it first:
+
+```bash
+sudo nginx -T | grep -n "server_name app.micm-mm.com"
+ls -l /etc/nginx/sites-enabled/
+```
+
+Verify after reload:
+
+```bash
+curl -I https://app.micm-mm.com/
+curl -I https://app.micm-mm.com/sign-in
+curl -I https://app.micm-mm.com/api/healthz
+```
+
+Each response should include:
+
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
+
 ## Rollback Process
 
 If deployment fails before PM2 restart, fix the failed step and rerun the workflow after confirming the database state.
@@ -97,6 +152,7 @@ Do not manually edit production data during rollback unless there is a reviewed 
 After each successful deploy, verify:
 
 - [ ] `GET /api/healthz` returns healthy status through the public URL.
+- [ ] `/`, `/sign-in`, static assets, and `/api/healthz` include the expected security headers.
 - [ ] PM2 shows `micm-api` and `micm-web` online.
 - [ ] The sign-in page loads.
 - [ ] Demo auth remains unavailable in production.
