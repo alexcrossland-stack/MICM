@@ -12,6 +12,7 @@ import {
   BarChart3,
   TrendingUp,
   Brain,
+  ShieldCheck,
   Menu,
   X,
   Sun,
@@ -30,6 +31,7 @@ const navItems = [
   { label: "Users", icon: Users, href: "/users", roles: ["super_admin", "company_admin"] },
   { label: "Companies", icon: Building2, href: "/companies", roles: ["super_admin"] },
   { label: "Programme", icon: Brain, href: "/programme", roles: ["super_admin"] },
+  { label: "Audit Logs", icon: ShieldCheck, href: "/audit-logs", roles: ["super_admin"] },
 ];
 
 export default function AppShell({ children }: { children: ReactNode }) {

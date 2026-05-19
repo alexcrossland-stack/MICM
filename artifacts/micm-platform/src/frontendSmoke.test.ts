@@ -293,6 +293,21 @@ const programmeData = {
   domains: ["Strategy"],
 };
 
+const auditLogs = [
+  {
+    id: 1,
+    actorUserId: 1,
+    actorClerkUserId: "clerk-super",
+    actorRole: "super_admin",
+    companyId: 1,
+    eventType: "report.exported",
+    targetType: "company_report",
+    targetId: "1",
+    metadata: { format: "pdf", template: "board_ready" },
+    createdAt: "2026-01-04T00:00:00.000Z",
+  },
+];
+
 vi.mock("@workspace/api-client-react", () => {
   const result = (data: unknown, extra: Record<string, unknown> = {}) => ({
     data,
@@ -342,6 +357,7 @@ vi.mock("@workspace/api-client-react", () => {
         },
       ],
     }),
+    useListAuditLogs: () => result(auditLogs),
     useListAssessments: () => result(assessments),
     useListCompanies: () => result(companies),
     useListCompanyUsers: () => result([
@@ -361,6 +377,7 @@ vi.mock("@workspace/api-client-react", () => {
 import AppShell from "./components/AppShell";
 import AnalyticsPage from "./pages/Analytics";
 import AssessmentDetailPage from "./pages/AssessmentDetail";
+import AuditLogsPage from "./pages/AuditLogs";
 import Dashboard from "./pages/Dashboard";
 import ProgrammePage from "./pages/Programme";
 import ReportsPage from "./pages/Reports";
@@ -398,6 +415,7 @@ describe("frontend smoke coverage", () => {
     expect(superAdminShell).toContain("Reports");
     expect(superAdminShell).toContain("Companies");
     expect(superAdminShell).toContain("Programme");
+    expect(superAdminShell).toContain("Audit Logs");
 
     setRole("company_admin", 2);
     const companyAdminShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
@@ -405,6 +423,7 @@ describe("frontend smoke coverage", () => {
     expect(companyAdminShell).toContain("Users");
     expect(companyAdminShell).not.toContain("Companies");
     expect(companyAdminShell).not.toContain("Programme");
+    expect(companyAdminShell).not.toContain("Audit Logs");
 
     setRole("company_user", 3);
     const companyUserShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
@@ -413,6 +432,7 @@ describe("frontend smoke coverage", () => {
     expect(companyUserShell).not.toContain("Reports");
     expect(companyUserShell).not.toContain("Users");
     expect(companyUserShell).not.toContain("Programme");
+    expect(companyUserShell).not.toContain("Audit Logs");
   });
 
   it("smoke-renders dashboard views for company users and Super Admins", () => {
@@ -478,6 +498,19 @@ describe("frontend smoke coverage", () => {
     const companyUserProgramme = render(React.createElement(ProgrammePage));
     expect(companyUserProgramme).toContain("Access Restricted");
     expect(companyUserProgramme).not.toContain("Maturity Heatmap");
+  });
+
+  it("smoke-renders audit logs for Super Admins only", () => {
+    setRole("super_admin", 1);
+    const superAdminAuditLogs = render(React.createElement(AuditLogsPage));
+    expect(superAdminAuditLogs).toContain("Audit Logs");
+    expect(superAdminAuditLogs).toContain("report.exported");
+    expect(superAdminAuditLogs).toContain("company_report");
+
+    setRole("company_admin", 2);
+    const companyAdminAuditLogs = render(React.createElement(AuditLogsPage));
+    expect(companyAdminAuditLogs).toContain("Access Restricted");
+    expect(companyAdminAuditLogs).not.toContain("report.exported");
   });
 
   it("smoke-renders assessment review and evidence notes for permitted users only", () => {
