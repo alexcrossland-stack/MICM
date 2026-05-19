@@ -9,9 +9,13 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
+import { createCorsOptions } from "./lib/corsPolicy";
 import { logger } from "./lib/logger";
+import { securityHeaders } from "./lib/securityHeaders";
 
 const app: Express = express();
+
+app.disable("x-powered-by");
 
 app.use(
   pinoHttp({
@@ -35,7 +39,8 @@ app.use(
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-app.use(cors({ credentials: true, origin: true }));
+app.use(securityHeaders());
+app.use(cors(createCorsOptions()));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
