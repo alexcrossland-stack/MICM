@@ -22,12 +22,15 @@ import {
 } from "../lib/reportComposition";
 import { formatCriterionNote } from "../lib/criterionNotes";
 import { recordAuditEvent } from "../lib/audit";
+import { COMPANY_CHALLENGE_OPTIONS, normalizeCompanyChallenges } from "../lib/companyInfo";
 
 const router: IRouter = Router();
 
 function formatCompany(c: any) {
   return {
     id: c.id, name: c.name, sector: c.sector, size: c.size, contactEmail: c.contactEmail,
+    currentStatusDescription: c.currentStatusDescription ?? null,
+    currentChallenges: normalizeCompanyChallenges(c.currentChallenges),
     isActive: c.isActive,
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
@@ -314,8 +317,29 @@ router.get("/reports/superadmin", requireAuth, async (req: any, res): Promise<vo
       latestOverallScore,
       completedAssessments: cycles.length,
       activeActions: activeActionsResult[0].count,
+      currentStatusDescription: company.currentStatusDescription ?? null,
+      currentChallenges: normalizeCompanyChallenges(company.currentChallenges),
+      challengeCount: normalizeCompanyChallenges(company.currentChallenges).length,
       domainScores,
     };
+  }));
+  const companyInfo = companySummaries.map((summary) => ({
+    companyId: summary.companyId,
+    companyName: summary.companyName,
+    currentStatusDescription: summary.currentStatusDescription,
+    currentChallenges: summary.currentChallenges,
+    challengeCount: summary.challengeCount,
+  }));
+  const mostCommonChallenges = COMPANY_CHALLENGE_OPTIONS
+    .map((challenge) => ({
+      challenge,
+      companyCount: companyInfo.filter((company) => company.currentChallenges.includes(challenge)).length,
+    }))
+    .filter((summary) => summary.companyCount > 0)
+    .sort((a, b) => b.companyCount - a.companyCount || a.challenge.localeCompare(b.challenge));
+  const companiesByChallenge = mostCommonChallenges.map(({ challenge }) => ({
+    challenge,
+    companies: companyInfo.filter((company) => company.currentChallenges.includes(challenge)),
   }));
 
   res.json(GetSuperAdminReportResponse.parse({
@@ -323,6 +347,9 @@ router.get("/reports/superadmin", requireAuth, async (req: any, res): Promise<vo
     totalAssessments: totalAssessmentsResult.count,
     totalUsers: totalUsersResult.count,
     companySummaries,
+    companyInfo,
+    mostCommonChallenges,
+    companiesByChallenge,
   }));
 });
 

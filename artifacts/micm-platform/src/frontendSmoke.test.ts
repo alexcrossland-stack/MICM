@@ -125,6 +125,8 @@ const companies = [
     sector: "Manufacturing",
     size: "51-200",
     contactEmail: "admin@acme.test",
+    currentStatusDescription: "Scaling output with pressure on cash and delivery.",
+    currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
     isActive: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -135,11 +137,41 @@ const companies = [
     sector: "Manufacturing",
     size: "11-50",
     contactEmail: "admin@beta.test",
+    currentStatusDescription: "Stabilising workforce capacity and shop-floor flow.",
+    currentChallenges: ["Labour and skills shortages", "Production under-utilisation"],
     isActive: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
 ];
+
+const companyChallenges = vi.hoisted(() => ({
+  Cash_flow_pressure: "Cash flow pressure",
+  Labour_and_skills_shortages: "Labour and skills shortages",
+  Recruitment_and_retention: "Recruitment and retention",
+  Rising_material_costs: "Rising material costs",
+  Supply_chain_disruption: "Supply chain disruption",
+  Production_capacity_constraints: "Production capacity constraints",
+  Quality_issues_or_rework: "Quality issues or rework",
+  Delivery_performance_challenges: "Delivery performance challenges",
+  Equipment_reliability_and_downtime: "Equipment reliability and downtime",
+  Lack_of_process_standardisation: "Lack of process standardisation",
+  Limited_management_information_or_data_visibility: "Limited management information or data visibility",
+  Low_digital_maturity: "Low digital maturity",
+  Energy_costs_and_sustainability_pressure: "Energy costs and sustainability pressure",
+  Leadership_bandwidth_constraints: "Leadership bandwidth constraints",
+  Growth_planning_and_market_uncertainty: "Growth planning and market uncertainty",
+  "Production_under-utilisation": "Production under-utilisation",
+  Poor_forecast_accuracy: "Poor forecast accuracy",
+  Long_lead_times: "Long lead times",
+  "High_work-in-progress_levels": "High work-in-progress levels",
+  Inefficient_factory_layout_or_material_flow: "Inefficient factory layout or material flow",
+  Low_sales_pipeline_visibility: "Low sales pipeline visibility",
+  Customer_concentration_risk: "Customer concentration risk",
+  Difficulty_funding_capital_investment: "Difficulty funding capital investment",
+  Weak_supplier_performance_management: "Weak supplier performance management",
+  Limited_continuous_improvement_capability: "Limited continuous improvement capability",
+} as const));
 
 const assessments = [
   {
@@ -319,6 +351,7 @@ vi.mock("@workspace/api-client-react", () => {
   });
 
   return {
+    CompanyChallenge: companyChallenges,
     GetCompanyReportExportFormat: { csv: "csv", pdf: "pdf", xlsx: "xlsx" },
     GetCompanyReportExportTemplate: {
       board_ready: "board_ready",
@@ -336,6 +369,7 @@ vi.mock("@workspace/api-client-react", () => {
       completedAssessments: 1,
       activeActions: 1,
     }),
+    useGetCompany: () => result(companies[0]),
     useGetCompanyReport: () => result(companyReport),
     useGetCrossCompanyRadar: () => result(radarData),
     useGetProgrammeIntelligence: () => result(programmeData),
@@ -353,7 +387,34 @@ vi.mock("@workspace/api-client-react", () => {
           latestOverallScore: 3,
           completedAssessments: 1,
           activeActions: 1,
+          currentStatusDescription: "Scaling output with pressure on cash and delivery.",
+          currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+          challengeCount: 2,
           domainScores: [{ domainId: 1, domainName: "Strategy", score: 3, band: "Developing" }],
+        },
+      ],
+      companyInfo: [
+        {
+          companyId: 1,
+          companyName: "Acme Precision",
+          currentStatusDescription: "Scaling output with pressure on cash and delivery.",
+          currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+          challengeCount: 2,
+        },
+      ],
+      mostCommonChallenges: [{ challenge: "Production under-utilisation", companyCount: 2 }],
+      companiesByChallenge: [
+        {
+          challenge: "Production under-utilisation",
+          companies: [
+            {
+              companyId: 1,
+              companyName: "Acme Precision",
+              currentStatusDescription: "Scaling output with pressure on cash and delivery.",
+              currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+              challengeCount: 2,
+            },
+          ],
         },
       ],
     }),
@@ -371,6 +432,7 @@ vi.mock("@workspace/api-client-react", () => {
       { id: 1, companyId: 1, domainId: 1, domainName: "Strategy", targetScore: 4, targetDate: "2026-12-31", notes: "Stretch target" },
     ]),
     useUpdateAssessment: () => result(undefined),
+    useUpdateCompany: () => result(undefined),
   };
 });
 
@@ -378,6 +440,7 @@ import AppShell from "./components/AppShell";
 import AnalyticsPage from "./pages/Analytics";
 import AssessmentDetailPage from "./pages/AssessmentDetail";
 import AuditLogsPage from "./pages/AuditLogs";
+import CompanyInfoPage from "./pages/CompanyInfo";
 import Dashboard from "./pages/Dashboard";
 import ProgrammePage from "./pages/Programme";
 import ReportsPage from "./pages/Reports";
@@ -412,6 +475,8 @@ describe("frontend smoke coverage", () => {
     setRole("super_admin", 1);
     const superAdminShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
     expect(superAdminShell).toContain("Dashboard");
+    expect(superAdminShell).toContain("Info");
+    expect(superAdminShell.indexOf(">Info<")).toBeLessThan(superAdminShell.indexOf(">Dashboard<"));
     expect(superAdminShell).toContain("Reports");
     expect(superAdminShell).toContain("Companies");
     expect(superAdminShell).toContain("Programme");
@@ -419,6 +484,7 @@ describe("frontend smoke coverage", () => {
 
     setRole("company_admin", 2);
     const companyAdminShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
+    expect(companyAdminShell).toContain("Info");
     expect(companyAdminShell).toContain("Reports");
     expect(companyAdminShell).toContain("Users");
     expect(companyAdminShell).not.toContain("Companies");
@@ -427,12 +493,31 @@ describe("frontend smoke coverage", () => {
 
     setRole("company_user", 3);
     const companyUserShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
+    expect(companyUserShell).toContain("Info");
     expect(companyUserShell).toContain("Assessments");
     expect(companyUserShell).toContain("Analytics");
     expect(companyUserShell).not.toContain("Reports");
     expect(companyUserShell).not.toContain("Users");
     expect(companyUserShell).not.toContain("Programme");
     expect(companyUserShell).not.toContain("Audit Logs");
+  });
+
+  it("smoke-renders company info with all controlled challenges and read-only Company User access", () => {
+    setRole("company_admin", 2);
+    const adminInfo = render(React.createElement(CompanyInfoPage));
+    expect(adminInfo).toContain("Current Status Description");
+    expect(adminInfo).toContain("Current Challenges");
+    expect(adminInfo).toContain("Save Info");
+    for (const challenge of Object.values(companyChallenges)) {
+      expect(adminInfo).toContain(challenge);
+    }
+    expect(adminInfo).toContain("Production under-utilisation");
+
+    setRole("company_user", 3);
+    const userInfo = render(React.createElement(CompanyInfoPage));
+    expect(userInfo).toContain("Read-only");
+    expect(userInfo).toContain("Company Users can view company info but cannot edit it.");
+    expect(userInfo).not.toContain("Save Info");
   });
 
   it("smoke-renders dashboard views for company users and Super Admins", () => {
@@ -458,6 +543,8 @@ describe("frontend smoke coverage", () => {
     expect(adminReports).toContain("CSV");
     expect(adminReports).toContain("PDF");
     expect(adminReports).toContain("Excel");
+    expect(adminReports).toContain("Company info");
+    expect(adminReports).toContain("Production under-utilisation");
     expect(adminReports).toContain("Evidence Notes");
 
     setRole("company_user", 3);

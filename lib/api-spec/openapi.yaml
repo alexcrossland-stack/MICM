@@ -967,6 +967,35 @@ components:
 
     # ─── Company ────────────────────────────────────────────────────────────────
 
+    CompanyChallenge:
+      type: string
+      enum:
+        - Cash flow pressure
+        - Labour and skills shortages
+        - Recruitment and retention
+        - Rising material costs
+        - Supply chain disruption
+        - Production capacity constraints
+        - Quality issues or rework
+        - Delivery performance challenges
+        - Equipment reliability and downtime
+        - Lack of process standardisation
+        - Limited management information or data visibility
+        - Low digital maturity
+        - Energy costs and sustainability pressure
+        - Leadership bandwidth constraints
+        - Growth planning and market uncertainty
+        - Production under-utilisation
+        - Poor forecast accuracy
+        - Long lead times
+        - High work-in-progress levels
+        - Inefficient factory layout or material flow
+        - Low sales pipeline visibility
+        - Customer concentration risk
+        - Difficulty funding capital investment
+        - Weak supplier performance management
+        - Limited continuous improvement capability
+
     Company:
       type: object
       properties:
@@ -980,6 +1009,12 @@ components:
           type: ["string", "null"]
         contactEmail:
           type: ["string", "null"]
+        currentStatusDescription:
+          type: ["string", "null"]
+        currentChallenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyChallenge"
         isActive:
           type: boolean
         createdAt:
@@ -989,6 +1024,7 @@ components:
       required:
         - id
         - name
+        - currentChallenges
         - isActive
         - createdAt
         - updatedAt
@@ -1004,6 +1040,12 @@ components:
           type: ["string", "null"]
         contactEmail:
           type: ["string", "null"]
+        currentStatusDescription:
+          type: ["string", "null"]
+        currentChallenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyChallenge"
       required:
         - name
 
@@ -1018,6 +1060,12 @@ components:
           type: ["string", "null"]
         contactEmail:
           type: ["string", "null"]
+        currentStatusDescription:
+          type: ["string", "null"]
+        currentChallenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyChallenge"
         isActive:
           type: ["boolean", "null"]
 
@@ -1714,11 +1762,26 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CompanyReportSummary"
+        companyInfo:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyInfoSummary"
+        mostCommonChallenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeFrequency"
+        companiesByChallenge:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeCompanyGroup"
       required:
         - totalCompanies
         - totalAssessments
         - totalUsers
         - companySummaries
+        - companyInfo
+        - mostCommonChallenges
+        - companiesByChallenge
 
     CompanyReportSummary:
       type: object
@@ -1733,6 +1796,14 @@ components:
           type: integer
         activeActions:
           type: integer
+        currentStatusDescription:
+          type: ["string", "null"]
+        currentChallenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyChallenge"
+        challengeCount:
+          type: integer
         domainScores:
           type: array
           items:
@@ -1742,7 +1813,54 @@ components:
         - companyName
         - completedAssessments
         - activeActions
+        - currentChallenges
+        - challengeCount
         - domainScores
+
+    CompanyInfoSummary:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        companyName:
+          type: string
+        currentStatusDescription:
+          type: ["string", "null"]
+        currentChallenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyChallenge"
+        challengeCount:
+          type: integer
+      required:
+        - companyId
+        - companyName
+        - currentChallenges
+        - challengeCount
+
+    ChallengeFrequency:
+      type: object
+      properties:
+        challenge:
+          $ref: "#/components/schemas/CompanyChallenge"
+        companyCount:
+          type: integer
+      required:
+        - challenge
+        - companyCount
+
+    ChallengeCompanyGroup:
+      type: object
+      properties:
+        challenge:
+          $ref: "#/components/schemas/CompanyChallenge"
+        companies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyInfoSummary"
+      required:
+        - challenge
+        - companies
 
     # ─── Targets ─────────────────────────────────────────────────────────────────
 

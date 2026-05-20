@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Brain,
   ShieldCheck,
+  Info,
   Menu,
   X,
   Sun,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 
 const navItems = [
+  { label: "Info", icon: Info, href: "/info", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Dashboard", icon: LayoutDashboard, href: "/", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Assessments", icon: ClipboardList, href: "/assessments", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Actions", icon: Zap, href: "/actions", roles: ["super_admin", "company_admin", "company_user"] },

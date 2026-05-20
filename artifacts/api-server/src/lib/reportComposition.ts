@@ -21,6 +21,11 @@ export type ReportComposition = {
     openActions: number;
     evidenceNotes: number;
   };
+  companyInfo: {
+    currentStatusDescription: string | null;
+    currentChallenges: string[];
+    challengeCount: number;
+  };
   executiveSummary: {
     headline: string;
     bullets: string[];
@@ -84,6 +89,7 @@ export function composeCompanyReport(
   const latestOverallScore = validScores.length > 0 ? round2(validScores.reduce((a, b) => a + b, 0) / validScores.length) : null;
   const openActions = report.actions.filter((action) => action.status !== "completed").length;
   const evidenceNotes = report.criterionNotes.length;
+  const currentChallenges = report.company.currentChallenges ?? [];
   const evidenceNotePreview = report.criterionNotes
     .slice(0, template === "operational_detail" ? 10 : 5)
     .map((note) => ({
@@ -117,9 +123,14 @@ export function composeCompanyReport(
       openActions,
       evidenceNotes,
     },
+    companyInfo: {
+      currentStatusDescription: report.company.currentStatusDescription ?? null,
+      currentChallenges,
+      challengeCount: currentChallenges.length,
+    },
     executiveSummary: {
       headline: buildHeadline(report.company.name, latestOverallScore, openActions),
-      bullets: buildExecutiveBullets(completedAssessments, latestOverallScore, openActions, evidenceNotes, template),
+      bullets: buildExecutiveBullets(completedAssessments, latestOverallScore, openActions, evidenceNotes, currentChallenges.length, template),
     },
     maturityOverview: {
       overallScore: latestOverallScore,
@@ -181,6 +192,7 @@ function buildExecutiveBullets(
   latestOverallScore: number | null,
   openActions: number,
   evidenceNotes: number,
+  challengeCount: number,
   template: ReportTemplate,
 ) {
   const bullets = [
@@ -190,6 +202,7 @@ function buildExecutiveBullets(
       : `Latest overall maturity score is ${latestOverallScore} out of 4.`,
     `${openActions} open action${openActions === 1 ? "" : "s"} remain on the roadmap.`,
     `${evidenceNotes} criterion evidence note${evidenceNotes === 1 ? "" : "s"} ${evidenceNotes === 1 ? "is" : "are"} available for review context.`,
+    `${challengeCount} current business challenge${challengeCount === 1 ? "" : "s"} ${challengeCount === 1 ? "is" : "are"} recorded in company info.`,
   ];
   if (template === "operational_detail") {
     bullets.push("Operational detail template includes the full domain findings and priority action roadmap.");

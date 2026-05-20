@@ -30,6 +30,8 @@ const mock = vi.hoisted(() => {
       "sector",
       "size",
       "contactEmail",
+      "currentStatusDescription",
+      "currentChallenges",
       "isActive",
       "createdAt",
       "updatedAt",
@@ -149,8 +151,26 @@ const mock = vi.hoisted(() => {
   function seedRows(): Rows {
     return {
       companies: [
-        dated({ id: 1, name: "Acme Precision", sector: "Manufacturing", size: "51-200", contactEmail: "admin@acme.test", isActive: true }),
-        dated({ id: 2, name: "Beta Fabrication", sector: "Manufacturing", size: "11-50", contactEmail: "admin@beta.test", isActive: true }),
+        dated({
+          id: 1,
+          name: "Acme Precision",
+          sector: "Manufacturing",
+          size: "51-200",
+          contactEmail: "admin@acme.test",
+          currentStatusDescription: "Scaling output with pressure on cash and delivery.",
+          currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+          isActive: true,
+        }),
+        dated({
+          id: 2,
+          name: "Beta Fabrication",
+          sector: "Manufacturing",
+          size: "11-50",
+          contactEmail: "admin@beta.test",
+          currentStatusDescription: "Stabilising workforce capacity and shop-floor flow.",
+          currentChallenges: ["Labour and skills shortages", "Production under-utilisation"],
+          isActive: true,
+        }),
       ],
       users: [
         dated({ id: 1, clerkUserId: "clerk-super", email: "super@example.test", firstName: "Super", lastName: "Admin", role: "super_admin", companyId: null, isActive: true }),
@@ -535,6 +555,84 @@ describe("tenant isolation and role permissions", () => {
   });
 });
 
+describe("company info", () => {
+  beforeEach(() => {
+    mock.reset();
+  });
+
+  it("rejects unknown current challenge values", async () => {
+    signInAs("clerk-admin-a");
+    const response = await request(app)
+      .patch("/api/companies/1")
+      .send({ currentChallenges: ["Production under-utilisation", "Not a controlled challenge"] });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("allows Super Admins to view and update any company info", async () => {
+    signInAs("clerk-super");
+
+    const readResponse = await request(app).get("/api/companies/2");
+    expect(readResponse.status).toBe(200);
+    expect(readResponse.body.currentChallenges).toContain("Production under-utilisation");
+
+    const updateResponse = await request(app)
+      .patch("/api/companies/2")
+      .send({
+        currentStatusDescription: "Super Admin updated current status.",
+        currentChallenges: ["Long lead times", "Production under-utilisation"],
+      });
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.currentStatusDescription).toBe("Super Admin updated current status.");
+    expect(updateResponse.body.currentChallenges).toEqual(["Long lead times", "Production under-utilisation"]);
+  });
+
+  it("allows Company Admins to update only their own company info and records audit events", async () => {
+    signInAs("clerk-admin-a");
+
+    const updateResponse = await request(app)
+      .patch("/api/companies/1")
+      .send({
+        currentStatusDescription: "Company Admin updated current status.",
+        currentChallenges: ["Cash flow pressure", "Long lead times"],
+      });
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.currentStatusDescription).toBe("Company Admin updated current status.");
+    expect(updateResponse.body.currentChallenges).toEqual(["Cash flow pressure", "Long lead times"]);
+
+    expect(
+      (await request(app).patch("/api/companies/2").send({ currentChallenges: ["Long lead times"] })).status,
+    ).toBe(403);
+
+    signInAs("clerk-super");
+    const auditResponse = await request(app).get("/api/audit-logs").query({ companyId: 1 });
+    expect(auditResponse.status).toBe(200);
+    expect(auditResponse.body.map((entry: any) => entry.eventType)).toEqual(
+      expect.arrayContaining([
+        "company.updated",
+        "company_info.status_description_updated",
+        "company_info.challenges_updated",
+      ]),
+    );
+    expect(JSON.stringify(auditResponse.body)).not.toContain("Company Admin updated current status.");
+  });
+
+  it("allows Company Users to view their own company info but not update it", async () => {
+    signInAs("clerk-user-a");
+
+    const readResponse = await request(app).get("/api/companies/1");
+    expect(readResponse.status).toBe(200);
+    expect(readResponse.body.currentStatusDescription).toContain("Scaling output");
+    expect(readResponse.body.currentChallenges).toContain("Cash flow pressure");
+
+    const updateResponse = await request(app)
+      .patch("/api/companies/1")
+      .send({ currentStatusDescription: "Company User should not be able to write" });
+    expect(updateResponse.status).toBe(403);
+  });
+});
+
 describe("assessment lifecycle", () => {
   beforeEach(() => {
     mock.reset();
@@ -735,6 +833,8 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(exportResponse.headers["content-type"]).toContain("text/csv");
     expect(exportResponse.headers["content-disposition"]).toContain("acme-precision-board-ready-report.csv");
     expect(exportResponse.text).toContain("template,section,company_id,company_name,item_id,item_name,item_date");
+    expect(exportResponse.text).toContain("board_ready,company_info,1,Acme Precision,,Current Status Description");
+    expect(exportResponse.text).toContain("Production under-utilisation");
     expect(exportResponse.text).toContain("board_ready,domain_findings,1,Acme Precision");
     expect(exportResponse.text).toContain("1,Strategy,3,Developing,3.5");
 
@@ -753,6 +853,8 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(workbookResponse.body.subarray(0, 2).toString("utf8")).toBe("PK");
     const workbookText = workbookResponse.body.toString("utf8");
     expect(workbookText).toContain("Summary");
+    expect(workbookText).toContain("Company Info");
+    expect(workbookText).toContain("Production under-utilisation");
     expect(workbookText).toContain("Domain Scores");
     expect(workbookText).toContain("Actions");
     expect(workbookText).toContain("Strategy");
@@ -792,6 +894,28 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     const superReportResponse = await request(app).get("/api/reports/superadmin");
     expect(superReportResponse.status).toBe(200);
     expect(superReportResponse.body.totalCompanies).toBe(2);
+    expect(superReportResponse.body.companyInfo).toEqual([
+      expect.objectContaining({
+        companyId: 1,
+        companyName: "Acme Precision",
+        currentStatusDescription: "Scaling output with pressure on cash and delivery.",
+        currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+        challengeCount: 2,
+      }),
+      expect.objectContaining({
+        companyId: 2,
+        companyName: "Beta Fabrication",
+        currentChallenges: ["Labour and skills shortages", "Production under-utilisation"],
+        challengeCount: 2,
+      }),
+    ]);
+    expect(superReportResponse.body.mostCommonChallenges[0]).toEqual({
+      challenge: "Production under-utilisation",
+      companyCount: 2,
+    });
+    expect(
+      superReportResponse.body.companiesByChallenge.find((group: any) => group.challenge === "Production under-utilisation").companies,
+    ).toHaveLength(2);
 
     const radarResponse = await request(app).get("/api/reports/cross-company-radar").query({ companyIds: "1,2" });
     expect(radarResponse.status).toBe(200);
@@ -837,6 +961,8 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(composition.coverSummary.companyName).toBe("Acme Precision");
     expect(composition.executiveSummary.bullets.length).toBeGreaterThan(0);
     expect(composition.maturityOverview.overallScore).toBe(3.5);
+    expect(composition.companyInfo.currentStatusDescription).toBe("Scaling output with pressure on cash and delivery.");
+    expect(composition.companyInfo.currentChallenges).toContain("Production under-utilisation");
     expect(composition.domainFindings.map((finding) => finding.domainName)).toEqual(["Strategy", "Operations"]);
     expect(composition.actionRoadmap.byStatus.not_started).toBe(1);
     expect(composition.coverSummary.evidenceNotes).toBe(1);

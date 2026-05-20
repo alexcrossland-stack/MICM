@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend,
 } from "recharts";
-import { BarChart3, TrendingUp, Building2, Download, Loader2, MessageSquare } from "lucide-react";
+import { BarChart3, TrendingUp, Building2, Download, Loader2, MessageSquare, Info } from "lucide-react";
 import {
   ScoreBandText,
   AssessmentMultiSelect,
@@ -191,6 +191,42 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Super Admin: Cross-company comparison ─────────────────────────────── */}
+      {isSuperAdmin && superAdminReport && (
+        <Card className="border-card-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Info className="w-4 h-4" />
+              Company Info Across Companies
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(superAdminReport.companyInfo ?? []).map((companyInfo) => (
+                <div key={companyInfo.companyId} className="rounded-md border border-border bg-muted/20 p-3">
+                  <p className="text-sm font-medium">{companyInfo.companyName}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {companyInfo.currentStatusDescription || "No current status description recorded."}
+                  </p>
+                  <p className="text-xs mt-2">{companyInfo.challengeCount} current challenge{companyInfo.challengeCount === 1 ? "" : "s"}</p>
+                </div>
+              ))}
+            </div>
+            {(superAdminReport.mostCommonChallenges ?? []).length > 0 && (
+              <div>
+                <p className="text-xs font-medium mb-2">Most common challenges</p>
+                <div className="flex flex-wrap gap-2">
+                  {superAdminReport.mostCommonChallenges.slice(0, 8).map((item) => (
+                    <span key={item.challenge} className="rounded-full bg-muted px-2.5 py-1 text-xs">
+                      {item.challenge}: {item.companyCount}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {isSuperAdmin && (
         <Card className="border-card-border">
           <CardHeader className="pb-2">
@@ -353,6 +389,35 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="border-card-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Info className="w-4 h-4" />
+                Company info
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Current Status Description</p>
+                <p className="text-sm mt-1 whitespace-pre-wrap">
+                  {report.company.currentStatusDescription || "No current status description recorded."}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Current Challenges</p>
+                {(report.company.currentChallenges ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-1">No current challenges recorded.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {report.company.currentChallenges.map((challenge) => (
+                      <span key={challenge} className="rounded-full bg-muted px-2.5 py-1 text-xs">{challenge}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           <Card className="border-card-border">
             <CardHeader className="pb-2">
