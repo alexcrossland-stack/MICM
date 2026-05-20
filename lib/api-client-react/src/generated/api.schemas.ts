@@ -54,6 +54,43 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export type CompanyChallenge =
+  (typeof CompanyChallenge)[keyof typeof CompanyChallenge];
+
+export const CompanyChallenge = {
+  Cash_flow_pressure: "Cash flow pressure",
+  Labour_and_skills_shortages: "Labour and skills shortages",
+  Recruitment_and_retention: "Recruitment and retention",
+  Rising_material_costs: "Rising material costs",
+  Supply_chain_disruption: "Supply chain disruption",
+  Production_capacity_constraints: "Production capacity constraints",
+  Quality_issues_or_rework: "Quality issues or rework",
+  Delivery_performance_challenges: "Delivery performance challenges",
+  Equipment_reliability_and_downtime: "Equipment reliability and downtime",
+  Lack_of_process_standardisation: "Lack of process standardisation",
+  Limited_management_information_or_data_visibility:
+    "Limited management information or data visibility",
+  Low_digital_maturity: "Low digital maturity",
+  Energy_costs_and_sustainability_pressure:
+    "Energy costs and sustainability pressure",
+  Leadership_bandwidth_constraints: "Leadership bandwidth constraints",
+  Growth_planning_and_market_uncertainty:
+    "Growth planning and market uncertainty",
+  "Production_under-utilisation": "Production under-utilisation",
+  Poor_forecast_accuracy: "Poor forecast accuracy",
+  Long_lead_times: "Long lead times",
+  "High_work-in-progress_levels": "High work-in-progress levels",
+  Inefficient_factory_layout_or_material_flow:
+    "Inefficient factory layout or material flow",
+  Low_sales_pipeline_visibility: "Low sales pipeline visibility",
+  Customer_concentration_risk: "Customer concentration risk",
+  Difficulty_funding_capital_investment:
+    "Difficulty funding capital investment",
+  Weak_supplier_performance_management: "Weak supplier performance management",
+  Limited_continuous_improvement_capability:
+    "Limited continuous improvement capability",
+} as const;
+
 export interface Company {
   id: number;
   name: string;
@@ -63,6 +100,9 @@ export interface Company {
   size?: string | null;
   /** @nullable */
   contactEmail?: string | null;
+  /** @nullable */
+  currentStatusDescription?: string | null;
+  currentChallenges: CompanyChallenge[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -76,6 +116,9 @@ export interface CreateCompanyBody {
   size?: string | null;
   /** @nullable */
   contactEmail?: string | null;
+  /** @nullable */
+  currentStatusDescription?: string | null;
+  currentChallenges?: CompanyChallenge[];
 }
 
 export interface UpdateCompanyBody {
@@ -87,6 +130,9 @@ export interface UpdateCompanyBody {
   size?: string | null;
   /** @nullable */
   contactEmail?: string | null;
+  /** @nullable */
+  currentStatusDescription?: string | null;
+  currentChallenges?: CompanyChallenge[];
   /** @nullable */
   isActive?: boolean | null;
 }
@@ -511,7 +557,30 @@ export interface CompanyReportSummary {
   latestOverallScore?: number | null;
   completedAssessments: number;
   activeActions: number;
+  /** @nullable */
+  currentStatusDescription?: string | null;
+  currentChallenges: CompanyChallenge[];
+  challengeCount: number;
   domainScores: DomainScore[];
+}
+
+export interface CompanyInfoSummary {
+  companyId: number;
+  companyName: string;
+  /** @nullable */
+  currentStatusDescription?: string | null;
+  currentChallenges: CompanyChallenge[];
+  challengeCount: number;
+}
+
+export interface ChallengeFrequency {
+  challenge: CompanyChallenge;
+  companyCount: number;
+}
+
+export interface ChallengeCompanyGroup {
+  challenge: CompanyChallenge;
+  companies: CompanyInfoSummary[];
 }
 
 export interface SuperAdminReport {
@@ -519,6 +588,9 @@ export interface SuperAdminReport {
   totalAssessments: number;
   totalUsers: number;
   companySummaries: CompanyReportSummary[];
+  companyInfo: CompanyInfoSummary[];
+  mostCommonChallenges: ChallengeFrequency[];
+  companiesByChallenge: ChallengeCompanyGroup[];
 }
 
 export interface MaturityTarget {

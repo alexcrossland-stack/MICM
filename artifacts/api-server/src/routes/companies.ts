@@ -15,6 +15,11 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
 import { recordAuditEvent } from "../lib/audit";
+import {
+  companyChallengeDiff,
+  normalizeCompanyChallenges,
+  sameCompanyChallenges,
+} from "../lib/companyInfo";
 
 const router: IRouter = Router();
 
@@ -25,6 +30,8 @@ function formatCompany(c: any) {
     sector: c.sector,
     size: c.size,
     contactEmail: c.contactEmail,
+    currentStatusDescription: c.currentStatusDescription ?? null,
+    currentChallenges: normalizeCompanyChallenges(c.currentChallenges),
     isActive: c.isActive,
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
@@ -54,7 +61,12 @@ router.post("/companies", requireAuth, async (req: any, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [company] = await db.insert(companiesTable).values(parsed.data).returning();
+  const companyInput = {
+    ...parsed.data,
+    currentStatusDescription: parsed.data.currentStatusDescription?.trim() || null,
+    currentChallenges: normalizeCompanyChallenges(parsed.data.currentChallenges),
+  };
+  const [company] = await db.insert(companiesTable).values(companyInput).returning();
   await recordAuditEvent(req, {
     currentUser,
     eventType: "company.created",
@@ -124,10 +136,29 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
   if (parsed.data.sector !== undefined) updates.sector = parsed.data.sector;
   if (parsed.data.size !== undefined) updates.size = parsed.data.size;
   if (parsed.data.contactEmail !== undefined) updates.contactEmail = parsed.data.contactEmail;
+  if (parsed.data.currentStatusDescription !== undefined) {
+    const trimmed = parsed.data.currentStatusDescription?.trim() ?? null;
+    updates.currentStatusDescription = trimmed === "" ? null : trimmed;
+  }
+  if (parsed.data.currentChallenges !== undefined) {
+    updates.currentChallenges = normalizeCompanyChallenges(parsed.data.currentChallenges);
+  }
   if (parsed.data.isActive != null) updates.isActive = parsed.data.isActive;
+
+  const [existingCompany] = await db.select().from(companiesTable).where(eq(companiesTable.id, params.data.id));
+  if (!existingCompany) { res.status(404).json({ error: "Company not found" }); return; }
+  const previousStatusDescription = existingCompany.currentStatusDescription ?? null;
+  const previousChallenges = normalizeCompanyChallenges(existingCompany.currentChallenges);
 
   const [company] = await db.update(companiesTable).set(updates).where(eq(companiesTable.id, params.data.id)).returning();
   if (!company) { res.status(404).json({ error: "Company not found" }); return; }
+  const currentChallenges = normalizeCompanyChallenges(company.currentChallenges);
+  const statusDescriptionChanged =
+    Object.prototype.hasOwnProperty.call(updates, "currentStatusDescription")
+    && previousStatusDescription !== (company.currentStatusDescription ?? null);
+  const challengesChanged =
+    Object.prototype.hasOwnProperty.call(updates, "currentChallenges")
+    && !sameCompanyChallenges(previousChallenges, currentChallenges);
   await recordAuditEvent(req, {
     currentUser,
     eventType: "company.updated",
@@ -139,6 +170,33 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
       contactEmailChanged: Object.prototype.hasOwnProperty.call(updates, "contactEmail"),
     },
   });
+  if (statusDescriptionChanged) {
+    await recordAuditEvent(req, {
+      currentUser,
+      eventType: "company_info.status_description_updated",
+      companyId: company.id,
+      targetType: "company",
+      targetId: company.id,
+      metadata: {
+        previousLength: previousStatusDescription?.length ?? 0,
+        newLength: company.currentStatusDescription?.length ?? 0,
+      },
+    });
+  }
+  if (challengesChanged) {
+    await recordAuditEvent(req, {
+      currentUser,
+      eventType: "company_info.challenges_updated",
+      companyId: company.id,
+      targetType: "company",
+      targetId: company.id,
+      metadata: {
+        previousChallengeCount: previousChallenges.length,
+        newChallengeCount: currentChallenges.length,
+        ...companyChallengeDiff(previousChallenges, currentChallenges),
+      },
+    });
+  }
   res.json(GetCompanyResponse.parse(formatCompany(company)));
 });
 

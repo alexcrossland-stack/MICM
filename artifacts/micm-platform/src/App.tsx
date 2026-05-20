@@ -9,6 +9,7 @@ import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
+import CompanyInfoPage from "@/pages/CompanyInfo";
 import AssessmentsPage from "@/pages/Assessments";
 import AssessmentDetailPage from "@/pages/AssessmentDetail";
 import TakeAssessmentPage from "@/pages/TakeAssessment";
@@ -99,6 +100,7 @@ function ProtectedRoutes() {
     <AppShell>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/info" component={CompanyInfoPage} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/assessments" component={AssessmentsPage} />
         <Route path="/assessments/:id/take" component={TakeAssessmentPage} />

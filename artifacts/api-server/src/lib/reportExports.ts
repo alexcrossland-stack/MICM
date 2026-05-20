@@ -54,6 +54,37 @@ function buildCompanyReportCsv(composition: ReportComposition) {
     ],
   ];
 
+  rows.push([
+    composition.template,
+    "company_info",
+    String(composition.coverSummary.companyId),
+    composition.coverSummary.companyName,
+    "",
+    "Current Status Description",
+    "",
+    "",
+    "",
+    "",
+    composition.companyInfo.currentStatusDescription ?? "",
+    "",
+  ]);
+  for (const challenge of composition.companyInfo.currentChallenges) {
+    rows.push([
+      composition.template,
+      "company_info",
+      String(composition.coverSummary.companyId),
+      composition.coverSummary.companyName,
+      "",
+      challenge,
+      "",
+      "",
+      "",
+      "",
+      "selected",
+      "",
+    ]);
+  }
+
   for (const domainScore of composition.maturityOverview.domainScores) {
     rows.push([
       composition.template,
@@ -127,7 +158,19 @@ function buildCompanyReportWorkbook(composition: ReportComposition) {
         ["Completed assessments", composition.coverSummary.completedAssessments],
         ["Open actions", composition.coverSummary.openActions],
         ["Evidence notes", composition.coverSummary.evidenceNotes],
+        ["Current status", composition.companyInfo.currentStatusDescription ?? ""],
+        ["Challenge count", composition.companyInfo.challengeCount],
+        ["Challenges", composition.companyInfo.currentChallenges.join("; ")],
         ["Executive summary", composition.executiveSummary.headline],
+      ],
+    },
+    {
+      name: "Company Info",
+      rows: [
+        ["Field", "Value"],
+        ["Current Status Description", composition.companyInfo.currentStatusDescription ?? ""],
+        ["Challenge count", composition.companyInfo.challengeCount],
+        ...composition.companyInfo.currentChallenges.map((challenge) => ["Challenge", challenge]),
       ],
     },
     {
