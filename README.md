@@ -331,6 +331,7 @@ No demo passwords, Clerk tokens, or secrets are stored in the repository. See `d
 │   ├── PRODUCTION_READINESS.md # Launch readiness gap tracker
 │   ├── MONITORING_LOGGING.md # Monitoring, alerting, and incident review runbook
 │   ├── BACKUP_RESTORE_REHEARSAL.md # Non-production backup/restore rehearsal checklist
+│   ├── PILOT_ONBOARDING.md # Live pilot account setup, onboarding, smoke-test, and go/no-go guide
 │   ├── PILOT_ACCEPTANCE_CHECKLIST.md # Pilot workflow acceptance and signoff template
 │   ├── PRODUCTION_PILOT_ACCOUNT_SETUP.md # Guarded production pilot account setup runbook
 │   ├── STAGING_DEMO_LOGIN.md # Staging demo account login setup
