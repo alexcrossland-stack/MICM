@@ -61,10 +61,24 @@ router.post("/invitations", requireAuth, async (req: any, res): Promise<void> =>
   const parsed = CreateInvitationBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  if (parsed.data.role === "super_admin" && currentUser.role !== "super_admin") {
+    res.status(403).json({ error: "Only Super Admins can invite Super Admin users" });
+    return;
+  }
+
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-  const companyId = parsed.data.companyId ?? currentUser.companyId;
+  const companyId = parsed.data.role === "super_admin"
+    ? null
+    : currentUser.role === "super_admin"
+      ? parsed.data.companyId ?? null
+      : currentUser.companyId;
+
+  if (parsed.data.role !== "super_admin" && companyId == null) {
+    res.status(400).json({ error: "Company is required for Company Admin and Company User invitations" });
+    return;
+  }
 
   const [invitation] = await db.insert(invitationsTable).values({
     email: parsed.data.email,
