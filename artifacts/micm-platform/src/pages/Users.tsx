@@ -44,6 +44,10 @@ export default function UsersPage() {
   const { mutateAsync: createInvitation, isPending } = useCreateInvitation();
 
   const canManage = isCompanyAdmin || isSuperAdmin;
+  const isInvitingSuperAdmin = inviteForm.role === "super_admin";
+  const isInviteDisabled = !inviteForm.email
+    || isPending
+    || (isSuperAdmin && !isInvitingSuperAdmin && !inviteForm.companyId);
 
   async function handleInvite() {
     if (!inviteForm.email) return;
@@ -156,7 +160,14 @@ export default function UsersPage() {
             </div>
             <div>
               <Label>Role</Label>
-              <Select value={inviteForm.role} onValueChange={v => setInviteForm(f => ({ ...f, role: v }))}>
+              <Select
+                value={inviteForm.role}
+                onValueChange={v => setInviteForm(f => ({
+                  ...f,
+                  role: v,
+                  companyId: v === "super_admin" ? "" : f.companyId,
+                }))}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="company_user">User</SelectItem>
@@ -165,7 +176,12 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
-            {isSuperAdmin && (
+            {isSuperAdmin && isInvitingSuperAdmin && (
+              <p className="text-sm text-muted-foreground">
+                Super Admin users are global and are not attached to a company.
+              </p>
+            )}
+            {isSuperAdmin && !isInvitingSuperAdmin && (
               <div>
                 <Label>Company</Label>
                 <Select value={inviteForm.companyId} onValueChange={v => setInviteForm(f => ({ ...f, companyId: v }))}>
@@ -179,7 +195,7 @@ export default function UsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
-            <Button onClick={handleInvite} disabled={!inviteForm.email || isPending}>{isPending ? "Sending..." : "Send Invitation"}</Button>
+            <Button onClick={handleInvite} disabled={isInviteDisabled}>{isPending ? "Sending..." : "Send Invitation"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

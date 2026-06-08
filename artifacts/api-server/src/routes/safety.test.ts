@@ -522,6 +522,49 @@ describe("tenant isolation and role permissions", () => {
     expect((await request(app).get("/api/companies")).status).toBe(403);
   });
 
+  it("allows Super Admins to invite global Super Admin users only as unscoped users", async () => {
+    signInAs("clerk-super");
+    const response = await request(app)
+      .post("/api/invitations")
+      .send({ email: "new-super@example.test", role: "super_admin", companyId: 1 });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      email: "new-super@example.test",
+      role: "super_admin",
+      companyId: null,
+      status: "pending",
+    });
+  });
+
+  it("blocks Company Admins from inviting Super Admins or cross-company users", async () => {
+    signInAs("clerk-admin-a");
+    const escalationResponse = await request(app)
+      .post("/api/invitations")
+      .send({ email: "new-super@example.test", role: "super_admin" });
+    expect(escalationResponse.status).toBe(403);
+
+    const scopedResponse = await request(app)
+      .post("/api/invitations")
+      .send({ email: "new-user@example.test", role: "company_user", companyId: 2 });
+    expect(scopedResponse.status).toBe(201);
+    expect(scopedResponse.body).toMatchObject({
+      email: "new-user@example.test",
+      role: "company_user",
+      companyId: 1,
+    });
+  });
+
+  it("requires Super Admins to choose a company for company-scoped invitations", async () => {
+    signInAs("clerk-super");
+    const response = await request(app)
+      .post("/api/invitations")
+      .send({ email: "new-admin@example.test", role: "company_admin" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("Company is required");
+  });
+
   it("filters assessment listings for Company Admins and Company Users to their own company", async () => {
     signInAs("clerk-admin-a");
     const adminResponse = await request(app).get("/api/assessments").query({ companyId: 2 });
