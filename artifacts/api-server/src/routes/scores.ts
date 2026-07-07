@@ -79,12 +79,18 @@ router.post("/scores", requireAuth, async (req: any, res): Promise<void> => {
     return;
   }
 
-  const [assignee] = await db.select().from(assessmentAssigneesTable).where(
+  let [assignee] = await db.select().from(assessmentAssigneesTable).where(
     and(eq(assessmentAssigneesTable.assessmentId, assessmentId), eq(assessmentAssigneesTable.userId, currentUser.id)),
   );
   if (!assignee) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
+    if (currentUser.role !== "super_admin") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    [assignee] = await db.insert(assessmentAssigneesTable).values({
+      assessmentId,
+      userId: currentUser.id,
+    }).returning();
   }
 
   const results = [];

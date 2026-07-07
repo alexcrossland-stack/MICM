@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { companyScopedPath, useSelectedCompany } from "@/hooks/useSelectedCompany";
 import { useListCompanies, useCreateCompany, useUpdateCompany } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ const emptyForm: CompanyForm = { name: "", sector: "", size: "", contactEmail: "
 
 export default function CompaniesPage() {
   const { isSuperAdmin } = useCurrentUser();
+  const { setSelectedCompanyId } = useSelectedCompany();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
@@ -46,17 +48,32 @@ export default function CompaniesPage() {
   }
 
   async function handleSave() {
-    if (!form.name) return;
+    if (!form.name.trim() || !form.sector || !form.size) return;
     try {
       if (editCompany) {
         await updateCompany({ id: editCompany.id, data: { name: form.name, sector: form.sector || undefined, size: form.size || undefined, contactEmail: form.contactEmail || undefined } });
+        setSelectedCompanyId(editCompany.id);
         toast({ title: "Company updated" });
       } else {
-        await createCompany({ data: { name: form.name, sector: form.sector || undefined, size: form.size || undefined, contactEmail: form.contactEmail || undefined } });
+        const company = await createCompany({ data: { name: form.name.trim(), sector: form.sector, size: form.size, contactEmail: form.contactEmail || undefined } });
+        setSelectedCompanyId(company.id);
         toast({ title: "Company created" });
       }
       qc.invalidateQueries();
       setFormOpen(false);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  }
+
+  async function handleToggleActive(company: any) {
+    const nextActive = !company.isActive;
+    const action = nextActive ? "reactivate" : "deactivate";
+    if (!confirm(`Are you sure you want to ${action} ${company.name}? Existing records will be preserved.`)) return;
+    try {
+      await updateCompany({ id: company.id, data: { isActive: nextActive } });
+      qc.invalidateQueries();
+      toast({ title: nextActive ? "Company reactivated" : "Company deactivated" });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -91,7 +108,10 @@ export default function CompaniesPage() {
                       <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Building2 className="w-4 h-4 text-primary" />
                       </div>
-                      <h3 className="font-semibold text-sm truncate">{co.name}</h3>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-sm truncate">{co.name}</h3>
+                        {!co.isActive && <p className="text-xs text-destructive">Inactive</p>}
+                      </div>
                     </div>
                     <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                       {co.sector && <p>{co.sector}</p>}
@@ -99,15 +119,26 @@ export default function CompaniesPage() {
                       {co.contactEmail && <p>{co.contactEmail}</p>}
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(co)} className="h-7 w-7 p-0 flex-shrink-0">
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(co)} className="h-7 w-7 p-0">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleToggleActive(co)} className="h-7 text-xs">
+                      {co.isActive ? "Deactivate" : "Reactivate"}
+                    </Button>
+                  </div>
                 </div>
                 <div className="mt-3 flex gap-2">
-                  <Link href={`/assessments?companyId=${co.id}`}>
+                  <Link href={companyScopedPath("/info", co.id)}>
+                    <Button variant="outline" size="sm" className="text-xs h-7">Info</Button>
+                  </Link>
+                  <Link href={companyScopedPath("/users", co.id)}>
+                    <Button variant="outline" size="sm" className="text-xs h-7">Users</Button>
+                  </Link>
+                  <Link href={companyScopedPath("/assessments", co.id)}>
                     <Button variant="outline" size="sm" className="text-xs h-7">Assessments</Button>
                   </Link>
-                  <Link href={`/reports`}>
+                  <Link href={companyScopedPath("/reports", co.id)}>
                     <Button variant="outline" size="sm" className="text-xs h-7">Reports</Button>
                   </Link>
                 </div>
@@ -155,7 +186,7 @@ export default function CompaniesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!form.name || creating || updating}>{editCompany ? "Save" : "Create"}</Button>
+            <Button onClick={handleSave} disabled={!form.name.trim() || !form.sector || !form.size || creating || updating}>{editCompany ? "Save" : "Create"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

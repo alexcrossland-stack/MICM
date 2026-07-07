@@ -183,6 +183,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserRole"
 
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List users visible to the current administrator
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: role
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: [super_admin, company_admin, company_user, null]
+        - name: isActive
+          in: query
+          schema:
+            type: ["boolean", "null"]
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
   /companies/{id}/users:
     get:
       operationId: listCompanyUsers
@@ -245,6 +274,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+
+  /users/{id}/password-reset:
+    post:
+      operationId: triggerUserPasswordReset
+      tags: [users]
+      summary: Trigger a Clerk-managed password setup/reset email
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: Password setup/reset email requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPasswordResetResponse"
 
   # ─── Invitations ─────────────────────────────────────────────────────────────
 
@@ -596,6 +644,10 @@ paths:
           schema:
             type: ["integer", "null"]
         - name: assignedUserId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: assessmentId
           in: query
           schema:
             type: ["integer", "null"]
@@ -1171,8 +1223,30 @@ components:
           type: ["string", "null"]
         role:
           type: ["string", "null"]
+          enum: [super_admin, company_admin, company_user, null]
+        companyId:
+          type: ["integer", "null"]
         isActive:
           type: ["boolean", "null"]
+
+    UserPasswordResetResponse:
+      type: object
+      properties:
+        userId:
+          type: integer
+        email:
+          type: string
+        provider:
+          type: string
+          enum: [clerk]
+        status:
+          type: string
+          enum: [requested]
+      required:
+        - userId
+        - email
+        - provider
+        - status
 
     # ─── Invitation ──────────────────────────────────────────────────────────────
 

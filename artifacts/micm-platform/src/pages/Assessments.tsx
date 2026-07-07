@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { useListAssessments, useCreateAssessment } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { companyScopedPath, useSelectedCompany } from "@/hooks/useSelectedCompany";
+import { useListAssessments, useCreateAssessment, useListCompanies } from "@workspace/api-client-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { Plus, ClipboardList, ChevronRight, Calendar, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -21,25 +22,27 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 export default function AssessmentsPage() {
-  const { companyId, isSuperAdmin, isCompanyAdmin, userId } = useCurrentUser();
+  const { isSuperAdmin, isCompanyAdmin, userId } = useCurrentUser();
+  const { targetCompanyId, selectedCompanyId, setSelectedCompanyId } = useSelectedCompany();
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", startDate: "", endDate: "" });
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  const { data: companies } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
   const { data: assessments, isLoading } = useListAssessments(
-    companyId ? { companyId } : {},
-    { query: { enabled: true } as any }
+    targetCompanyId ? { companyId: targetCompanyId } : {},
+    { query: { enabled: !isSuperAdmin || !!targetCompanyId } as any }
   );
 
   const { mutateAsync: createAssessment, isPending } = useCreateAssessment();
 
   async function handleCreate() {
-    if (!form.name || !companyId) return;
+    if (!form.name || !targetCompanyId) return;
     try {
       await createAssessment({
         data: {
-          companyId,
+          companyId: targetCompanyId,
           name: form.name,
           description: form.description || undefined,
           startDate: form.startDate || undefined,
@@ -55,7 +58,7 @@ export default function AssessmentsPage() {
     }
   }
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (isLoading && targetCompanyId) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   return (
     <div className="space-y-6">
@@ -64,19 +67,48 @@ export default function AssessmentsPage() {
           <h1 className="text-2xl font-bold">Assessments</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage and take maturity assessments</p>
         </div>
-        {(isCompanyAdmin || isSuperAdmin) && companyId && (
+        {(isCompanyAdmin || isSuperAdmin) && targetCompanyId && (
           <Button onClick={() => setCreateOpen(true)} className="gap-2">
             <Plus className="w-4 h-4" />New Assessment
           </Button>
         )}
       </div>
 
-      {!assessments?.length ? (
+      {isSuperAdmin && (
+        <Card className="border-card-border">
+          <CardContent className="p-4">
+            <div className="w-full sm:w-80">
+              <Label>Company context</Label>
+              <Select value={selectedCompanyId?.toString() ?? ""} onValueChange={(value) => setSelectedCompanyId(Number(value))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select company to manage assessments" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies?.map((company) => (
+                    <SelectItem key={company.id} value={String(company.id)}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isSuperAdmin && !targetCompanyId ? (
+        <Card className="border-card-border border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 gap-3">
+            <ClipboardList className="w-10 h-10 text-muted-foreground" />
+            <p className="text-muted-foreground text-sm">Select a company to create or manage assessments.</p>
+          </CardContent>
+        </Card>
+      ) : !assessments?.length ? (
         <Card className="border-card-border border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 gap-3">
             <ClipboardList className="w-10 h-10 text-muted-foreground" />
             <p className="text-muted-foreground text-sm">No assessments yet</p>
-            {(isCompanyAdmin || isSuperAdmin) && companyId && (
+            {(isCompanyAdmin || isSuperAdmin) && targetCompanyId && (
               <Button onClick={() => setCreateOpen(true)} size="sm">Create first assessment</Button>
             )}
           </CardContent>
@@ -87,6 +119,7 @@ export default function AssessmentsPage() {
             const sc = statusConfig[a.status] ?? statusConfig.draft;
             const isAssigned = a.assignedUserIds?.includes(userId);
             const isCompleted = a.completedUserIds?.includes(userId);
+            const canTakeAssessment = (isSuperAdmin || isAssigned) && !isCompleted && a.status === "active";
             return (
               <Card key={a.id} className="border-card-border hover:shadow-sm transition-shadow">
                 <CardContent className="p-4">
@@ -109,7 +142,12 @@ export default function AssessmentsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {isAssigned && !isCompleted && a.status === "active" && (
+                      {a.status === "completed" && (
+                        <Link href={companyScopedPath("/analytics", a.companyId)}>
+                          <Button variant="outline" size="sm" className="text-xs">View Gap Analysis</Button>
+                        </Link>
+                      )}
+                      {canTakeAssessment && (
                         <Link href={`/assessments/${a.id}/take`}>
                           <Button size="sm" className="text-xs">Take Assessment</Button>
                         </Link>
@@ -156,7 +194,7 @@ export default function AssessmentsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!form.name || isPending}>{isPending ? "Creating..." : "Create"}</Button>
+            <Button onClick={handleCreate} disabled={!form.name || !targetCompanyId || isPending}>{isPending ? "Creating..." : "Create"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -69,15 +69,21 @@ router.post("/invitations", requireAuth, async (req: any, res): Promise<void> =>
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-  const companyId = parsed.data.role === "super_admin"
-    ? null
-    : currentUser.role === "super_admin"
-      ? parsed.data.companyId ?? null
-      : currentUser.companyId;
-
-  if (parsed.data.role !== "super_admin" && companyId == null) {
-    res.status(400).json({ error: "Company is required for Company Admin and Company User invitations" });
-    return;
+  let companyId: number | null | undefined;
+  if (parsed.data.role === "super_admin") {
+    companyId = null;
+  } else if (currentUser.role === "super_admin") {
+    companyId = parsed.data.companyId ?? null;
+    if (companyId == null) {
+      res.status(400).json({ error: "Company is required for Company Admin and Company User invitations" });
+      return;
+    }
+  } else {
+    companyId = currentUser.companyId;
+    if (!companyId || (parsed.data.companyId != null && parsed.data.companyId !== companyId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
   }
 
   const [invitation] = await db.insert(invitationsTable).values({

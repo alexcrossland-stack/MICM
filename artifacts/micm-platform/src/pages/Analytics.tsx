@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { useSelectedCompany } from "@/hooks/useSelectedCompany";
 import {
   useGetCompanyReport,
   useGetProgressOverTime,
@@ -74,15 +75,9 @@ function StatCard({
 }
 
 export default function AnalyticsPage() {
-  const { companyId, isSuperAdmin, isCompanyAdmin, role } = useCurrentUser();
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(companyId ?? null);
+  const { isSuperAdmin, isCompanyAdmin, role } = useCurrentUser();
+  const { selectedCompanyId, setSelectedCompanyId, targetCompanyId } = useSelectedCompany();
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<number[]>([]);
-
-  const targetCompanyId = isSuperAdmin ? selectedCompanyId : companyId;
-
-  useEffect(() => {
-    if (companyId && !isSuperAdmin) setSelectedCompanyId(companyId);
-  }, [companyId, isSuperAdmin]);
 
   const { data: companies } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
 

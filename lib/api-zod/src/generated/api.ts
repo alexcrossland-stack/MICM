@@ -338,6 +338,35 @@ export const GetMyRoleResponse = zod.object({
 });
 
 /**
+ * @summary List users visible to the current administrator
+ */
+export const ListUsersQueryParams = zod.object({
+  companyId: zod.coerce.number().nullish(),
+  role: zod
+    .union([
+      zod.literal("super_admin"),
+      zod.literal("company_admin"),
+      zod.literal("company_user"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  isActive: zod.coerce.boolean().nullish(),
+});
+
+export const ListUsersResponseItem = zod.object({
+  id: zod.number(),
+  clerkUserId: zod.string(),
+  email: zod.string(),
+  firstName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  role: zod.enum(["super_admin", "company_admin", "company_user"]),
+  companyId: zod.number().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.string(),
+});
+export const ListUsersResponse = zod.array(ListUsersResponseItem);
+
+/**
  * @summary List users in a company
  */
 export const ListCompanyUsersParams = zod.object({
@@ -386,7 +415,15 @@ export const UpdateUserParams = zod.object({
 export const UpdateUserBody = zod.object({
   firstName: zod.string().nullish(),
   lastName: zod.string().nullish(),
-  role: zod.string().nullish(),
+  role: zod
+    .union([
+      zod.literal("super_admin"),
+      zod.literal("company_admin"),
+      zod.literal("company_user"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  companyId: zod.number().nullish(),
   isActive: zod.boolean().nullish(),
 });
 
@@ -400,6 +437,13 @@ export const UpdateUserResponse = zod.object({
   companyId: zod.number().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.string(),
+});
+
+/**
+ * @summary Trigger a Clerk-managed password setup/reset email
+ */
+export const TriggerUserPasswordResetParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -786,6 +830,7 @@ export const ListDomainsResponse = zod.array(ListDomainsResponseItem);
 export const ListActionsQueryParams = zod.object({
   companyId: zod.coerce.number().nullish(),
   assignedUserId: zod.coerce.number().nullish(),
+  assessmentId: zod.coerce.number().nullish(),
   status: zod.coerce.string().nullish(),
 });
 

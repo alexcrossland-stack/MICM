@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { useListActions, useCreateAction, useUpdateAction, useDeleteAction, useListDomains } from "@workspace/api-client-react";
+import { useSelectedCompany } from "@/hooks/useSelectedCompany";
+import { useListActions, useCreateAction, useUpdateAction, useDeleteAction, useListDomains, useListCompanies, useListUsers, useListAssessments } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,23 +39,44 @@ type ActionForm = {
   domainId: string;
   dueDate: string;
   status: string;
+  assignedUserId: string;
+  assessmentId: string;
 };
-const emptyForm: ActionForm = { title: "", description: "", priority: "medium", domainId: "", dueDate: "", status: "not_started" };
+const emptyForm: ActionForm = { title: "", description: "", priority: "medium", domainId: "", dueDate: "", status: "not_started", assignedUserId: "", assessmentId: "" };
 
 export default function ActionsPage() {
-  const { companyId, isCompanyAdmin, isSuperAdmin } = useCurrentUser();
+  const { isCompanyAdmin, isSuperAdmin } = useCurrentUser();
+  const { targetCompanyId, selectedCompanyId, setSelectedCompanyId } = useSelectedCompany();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [editAction, setEditAction] = useState<any>(null);
   const [form, setForm] = useState<ActionForm>(emptyForm);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterAssignedUserId, setFilterAssignedUserId] = useState<string>("all");
+  const [filterAssessmentId, setFilterAssessmentId] = useState<string>("all");
 
   const { data: actions, isLoading } = useListActions(
-    companyId ? { companyId } : {},
-    { query: { enabled: !!companyId } as any }
+    targetCompanyId
+      ? {
+          companyId: targetCompanyId,
+          ...(filterStatus !== "all" ? { status: filterStatus } : {}),
+          ...(filterAssignedUserId !== "all" ? { assignedUserId: Number(filterAssignedUserId) } : {}),
+          ...(filterAssessmentId !== "all" ? { assessmentId: Number(filterAssessmentId) } : {}),
+        }
+      : {},
+    { query: { enabled: !!targetCompanyId } as any }
   );
+  const { data: companies } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
   const { data: domains } = useListDomains();
+  const { data: users } = useListUsers(
+    targetCompanyId ? { companyId: targetCompanyId, isActive: true } : {},
+    { query: { enabled: !!targetCompanyId } as any }
+  );
+  const { data: assessments } = useListAssessments(
+    targetCompanyId ? { companyId: targetCompanyId } : {},
+    { query: { enabled: !!targetCompanyId } as any }
+  );
   const { mutateAsync: createAction, isPending: creating } = useCreateAction();
   const { mutateAsync: updateAction, isPending: updating } = useUpdateAction();
   const { mutateAsync: deleteAction } = useDeleteAction();
@@ -75,13 +97,15 @@ export default function ActionsPage() {
       domainId: action.domainId?.toString() ?? "",
       dueDate: action.dueDate ? format(new Date(action.dueDate), "yyyy-MM-dd") : "",
       status: action.status,
+      assignedUserId: action.assignedUserId?.toString() ?? "",
+      assessmentId: action.assessmentId?.toString() ?? "",
     });
     setEditAction(action);
     setCreateOpen(true);
   }
 
   async function handleSave() {
-    if (!form.title || !companyId) return;
+    if (!form.title || !targetCompanyId) return;
     try {
       if (editAction) {
         await updateAction({
@@ -91,6 +115,7 @@ export default function ActionsPage() {
             description: form.description || undefined,
             priority: form.priority,
             status: form.status,
+            assignedUserId: form.assignedUserId ? Number(form.assignedUserId) : null,
             dueDate: form.dueDate || undefined,
           },
         });
@@ -98,10 +123,13 @@ export default function ActionsPage() {
       } else {
         await createAction({
           data: {
-            companyId,
+            companyId: targetCompanyId,
             title: form.title,
             description: form.description || undefined,
             priority: form.priority as "low" | "medium" | "high",
+            domainId: form.domainId ? Number(form.domainId) : undefined,
+            assessmentId: form.assessmentId ? Number(form.assessmentId) : undefined,
+            assignedUserId: form.assignedUserId ? Number(form.assignedUserId) : undefined,
             dueDate: form.dueDate || undefined,
           },
         });
@@ -121,14 +149,14 @@ export default function ActionsPage() {
     toast({ title: "Action deleted" });
   }
 
-  const filtered = actions?.filter((a: any) => filterStatus === "all" || a.status === filterStatus) ?? [];
+  const filtered = actions ?? [];
 
   const statusCounts = STATUS_OPTIONS.reduce((acc, s) => {
     acc[s] = actions?.filter((a: any) => a.status === s).length ?? 0;
     return acc;
   }, {} as Record<string, number>);
 
-  if (isLoading) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (isLoading && targetCompanyId) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   return (
     <div className="space-y-6">
@@ -137,13 +165,44 @@ export default function ActionsPage() {
           <h1 className="text-2xl font-bold">Actions</h1>
           <p className="text-muted-foreground text-sm mt-1">Track improvement actions and initiatives</p>
         </div>
-        {canManage && (
+        {canManage && targetCompanyId && (
           <Button onClick={openCreate} className="gap-2"><Plus className="w-4 h-4" />New Action</Button>
         )}
       </div>
 
-      {/* Status summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {isSuperAdmin && (
+        <Card className="border-card-border">
+          <CardContent className="p-4">
+            <div className="w-full sm:w-80">
+              <Label>Company context</Label>
+              <Select value={selectedCompanyId?.toString() ?? ""} onValueChange={(value) => setSelectedCompanyId(Number(value))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select company to manage actions" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies?.map((company) => (
+                    <SelectItem key={company.id} value={String(company.id)}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isSuperAdmin && !targetCompanyId ? (
+        <Card className="border-card-border border-dashed">
+          <CardContent className="flex flex-col items-center py-12 gap-3">
+            <Zap className="w-10 h-10 text-muted-foreground" />
+            <p className="text-muted-foreground text-sm">Select a company to view or manage actions.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Status summary */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {STATUS_OPTIONS.map(s => {
           const sc = statusConfig[s];
           return (
@@ -182,6 +241,26 @@ export default function ActionsPage() {
             {statusConfig[s].label}
           </button>
         ))}
+        <Select value={filterAssignedUserId} onValueChange={setFilterAssignedUserId}>
+          <SelectTrigger className="w-56 h-8 text-xs"><SelectValue placeholder="Filter assignee" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All assignees</SelectItem>
+            {users?.map((u: any) => (
+              <SelectItem key={u.id} value={String(u.id)}>
+                {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterAssessmentId} onValueChange={setFilterAssessmentId}>
+          <SelectTrigger className="w-56 h-8 text-xs"><SelectValue placeholder="Filter assessment" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All assessments</SelectItem>
+            {assessments?.map((assessment: any) => (
+              <SelectItem key={assessment.id} value={String(assessment.id)}>{assessment.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Action list */}
@@ -213,6 +292,8 @@ export default function ActionsPage() {
                       {action.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{action.description}</p>}
                       <div className="flex gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                         {domain && <span className="px-1.5 py-0.5 rounded bg-muted">{domain.name}</span>}
+                        {action.assignedUserId && <span>Assigned to {users?.find((u: any) => u.id === action.assignedUserId)?.email ?? `User ${action.assignedUserId}`}</span>}
+                        {action.assessmentId && <span>Assessment #{action.assessmentId}</span>}
                         {action.dueDate && (
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />{format(new Date(action.dueDate), "d MMM yyyy")}
@@ -272,9 +353,10 @@ export default function ActionsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Domain (optional)</Label>
-                <Select value={form.domainId} onValueChange={v => setForm(f => ({ ...f, domainId: v }))}>
+                <Select value={form.domainId || "none"} onValueChange={v => setForm(f => ({ ...f, domainId: v === "none" ? "" : v }))} disabled={!!editAction}>
                   <SelectTrigger><SelectValue placeholder="Select domain" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">No domain</SelectItem>
                     {domains?.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -284,13 +366,43 @@ export default function ActionsPage() {
                 <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Assigned user</Label>
+                <Select value={form.assignedUserId || "none"} onValueChange={v => setForm(f => ({ ...f, assignedUserId: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select assignee" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {users?.map((u: any) => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Assessment</Label>
+                <Select value={form.assessmentId || "none"} onValueChange={v => setForm(f => ({ ...f, assessmentId: v === "none" ? "" : v }))} disabled={!!editAction}>
+                  <SelectTrigger><SelectValue placeholder="Select assessment" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No assessment</SelectItem>
+                    {assessments?.map((assessment: any) => (
+                      <SelectItem key={assessment.id} value={String(assessment.id)}>{assessment.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!form.title || creating || updating}>{editAction ? "Save" : "Create"}</Button>
+            <Button onClick={handleSave} disabled={!form.title || !targetCompanyId || creating || updating}>{editAction ? "Save" : "Create"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

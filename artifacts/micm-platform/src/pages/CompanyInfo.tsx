@@ -7,6 +7,7 @@ import {
   useUpdateCompany,
 } from "@workspace/api-client-react";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { useSelectedCompany } from "@/hooks/useSelectedCompany";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,10 +28,10 @@ function sameChallenges(a: string[], b: string[]) {
 }
 
 export default function CompanyInfoPage() {
-  const { companyId, isSuperAdmin, isCompanyAdmin, isCompanyUser } = useCurrentUser();
+  const { isSuperAdmin, isCompanyAdmin, isCompanyUser } = useCurrentUser();
+  const { targetCompanyId, selectedCompanyId, setSelectedCompanyId } = useSelectedCompany();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(companyId ?? null);
   const [statusDescription, setStatusDescription] = useState("");
   const [selectedChallenges, setSelectedChallenges] = useState<CompanyChallengeValue[]>([]);
   const [saveState, setSaveState] = useState<string | null>(null);
@@ -41,17 +42,6 @@ export default function CompanyInfoPage() {
     query: { enabled: isSuperAdmin } as any,
   });
 
-  useEffect(() => {
-    if (isSuperAdmin && !selectedCompanyId && companies?.length) {
-      setSelectedCompanyId(companies[0].id);
-    }
-  }, [companies, isSuperAdmin, selectedCompanyId]);
-
-  useEffect(() => {
-    if (!isSuperAdmin) setSelectedCompanyId(companyId ?? null);
-  }, [companyId, isSuperAdmin]);
-
-  const targetCompanyId = isSuperAdmin ? selectedCompanyId : companyId;
   const { data: company, isLoading, error } = useGetCompany(
     targetCompanyId ?? 0,
     { query: { enabled: !!targetCompanyId } as any },
@@ -156,7 +146,14 @@ export default function CompanyInfoPage() {
         </Card>
       )}
 
-      {isLoading ? (
+      {isSuperAdmin && !targetCompanyId ? (
+        <Card className="border-card-border border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 gap-3">
+            <Building2 className="w-10 h-10 text-muted-foreground" />
+            <p className="text-muted-foreground text-sm">Select a company to view or update company info.</p>
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
         <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
       ) : (
         <Card className="border-card-border">

@@ -61,8 +61,13 @@ router.post("/companies", requireAuth, async (req: any, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  if (!parsed.data.name.trim()) {
+    res.status(400).json({ error: "Company name is required" });
+    return;
+  }
   const companyInput = {
     ...parsed.data,
+    name: parsed.data.name.trim(),
     currentStatusDescription: parsed.data.currentStatusDescription?.trim() || null,
     currentChallenges: normalizeCompanyChallenges(parsed.data.currentChallenges),
   };
@@ -132,7 +137,14 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const updates: any = {};
-  if (parsed.data.name != null) updates.name = parsed.data.name;
+  if (parsed.data.name != null) {
+    const trimmedName = parsed.data.name.trim();
+    if (!trimmedName) {
+      res.status(400).json({ error: "Company name is required" });
+      return;
+    }
+    updates.name = trimmedName;
+  }
   if (parsed.data.sector !== undefined) updates.sector = parsed.data.sector;
   if (parsed.data.size !== undefined) updates.size = parsed.data.size;
   if (parsed.data.contactEmail !== undefined) updates.contactEmail = parsed.data.contactEmail;
@@ -143,7 +155,7 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
   if (parsed.data.currentChallenges !== undefined) {
     updates.currentChallenges = normalizeCompanyChallenges(parsed.data.currentChallenges);
   }
-  if (parsed.data.isActive != null) updates.isActive = parsed.data.isActive;
+  if (parsed.data.isActive != null && currentUser.role === "super_admin") updates.isActive = parsed.data.isActive;
 
   const [existingCompany] = await db.select().from(companiesTable).where(eq(companiesTable.id, params.data.id));
   if (!existingCompany) { res.status(404).json({ error: "Company not found" }); return; }

@@ -1,5 +1,6 @@
 import { useRoute, Link } from "wouter";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { companyScopedPath } from "@/hooks/useSelectedCompany";
 import {
   useGetAssessment,
   useGetAssessmentResults,
@@ -127,7 +128,7 @@ function buildMissingScoreSections(
 export default function AssessmentDetailPage() {
   const [, params] = useRoute("/assessments/:id");
   const id = Number(params?.id);
-  const { companyId, isCompanyAdmin, isSuperAdmin, userId } = useCurrentUser();
+  const { companyId, isCompanyAdmin, isSuperAdmin, userId, clerkUser } = useCurrentUser();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [assignOpen, setAssignOpen] = useState(false);
@@ -142,7 +143,8 @@ export default function AssessmentDetailPage() {
   const { data: assessment, isLoading } = useGetAssessment(id);
   const { data: results } = useGetAssessmentResults(id);
   const { data: radarData } = useGetRadarData({ assessmentId: id });
-  const { data: users } = useListCompanyUsers(companyId ?? 0, { query: { enabled: !!companyId } as any });
+  const assessmentCompanyId = assessment?.companyId ?? companyId ?? 0;
+  const { data: users } = useListCompanyUsers(assessmentCompanyId, { query: { enabled: !!assessmentCompanyId } as any });
   const { mutateAsync: updateAssessment } = useUpdateAssessment();
   const { mutateAsync: assignAssessment } = useAssignAssessment();
   const canManage = isCompanyAdmin || isSuperAdmin;
@@ -168,13 +170,23 @@ export default function AssessmentDetailPage() {
   if (isLoading || !assessment) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   const isMyCompleted = userId != null && assessment.completedUserIds?.includes(userId);
+  const canTakeAssessment = (isSuperAdmin || isAssigned) && !isMyCompleted && assessment.status === "active";
+  const displayUsers: any[] = [...(users ?? [])];
+  if (isSuperAdmin && userId != null && !displayUsers.some((user) => user.id === userId)) {
+    displayUsers.push({
+      id: userId,
+      firstName: clerkUser?.firstName ?? "Super",
+      lastName: clerkUser?.lastName ?? "Admin",
+      email: clerkUser?.primaryEmailAddress?.emailAddress ?? "Super Admin",
+    });
+  }
   const criterionOptions = buildCriterionOptions(domains);
   const criterionById = new Map(criterionOptions.map((criterion) => [criterion.id, criterion]));
   const sortedCriterionNotes = [...(criterionNotes ?? [])].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   const missingScoreSections = canManage
-    ? buildMissingScoreSections(assessment.assignedUserIds, users, domains, scores)
+    ? buildMissingScoreSections(assessment.assignedUserIds, displayUsers, domains, scores)
     : [];
   const displayedMissingScoreSections = apiMissingScoreSections.length > 0 ? apiMissingScoreSections : missingScoreSections;
   const canMarkComplete = !scoresLoading && !domainsLoading && displayedMissingScoreSections.length === 0;
@@ -277,9 +289,14 @@ export default function AssessmentDetailPage() {
             <Users className="w-3.5 h-3.5" />Assign Users
           </Button>
         )}
-        {isAssigned && !isMyCompleted && assessment.status === "active" && (
+        {canTakeAssessment && (
           <Link href={`/assessments/${id}/take`}>
             <Button size="sm" className="gap-2"><CheckCircle2 className="w-3.5 h-3.5" />Take Assessment</Button>
+          </Link>
+        )}
+        {assessment.status === "completed" && (
+          <Link href={companyScopedPath("/analytics", assessment.companyId)}>
+            <Button size="sm" className="gap-2">View Gap Analysis</Button>
           </Link>
         )}
       </div>
@@ -324,7 +341,7 @@ export default function AssessmentDetailPage() {
           {assessment.assignedUserIds?.length ? (
             <div className="flex flex-wrap gap-2">
               {assessment.assignedUserIds.map((uid: number) => {
-                const u = users?.find((u: any) => u.id === uid);
+                const u = displayUsers.find((u: any) => u.id === uid);
                 const done = assessment.completedUserIds?.includes(uid);
                 return (
                   <div key={uid} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border ${done ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" : "bg-card border-border text-foreground"}`}>

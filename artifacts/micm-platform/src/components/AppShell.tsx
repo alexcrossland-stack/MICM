@@ -28,7 +28,7 @@ const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Assessments", icon: ClipboardList, href: "/assessments", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Actions", icon: Zap, href: "/actions", roles: ["super_admin", "company_admin", "company_user"] },
-  { label: "Analytics", icon: TrendingUp, href: "/analytics", roles: ["super_admin", "company_admin", "company_user"] },
+  { label: "Analytics & Gap Analysis", icon: TrendingUp, href: "/analytics", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Reports", icon: BarChart3, href: "/reports", roles: ["super_admin", "company_admin"] },
   { label: "Users", icon: Users, href: "/users", roles: ["super_admin", "company_admin"] },
   { label: "Companies", icon: Building2, href: "/companies", roles: ["super_admin"] },

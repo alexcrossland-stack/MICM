@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
+import { useSelectedCompany } from "@/hooks/useSelectedCompany";
 import {
   useGetRadarData,
   useGetProgressOverTime,
@@ -52,11 +53,11 @@ function filenameFromDisposition(disposition: string | null, fallback: string) {
 }
 
 export default function ReportsPage() {
-  const { companyId, isSuperAdmin, isCompanyAdmin, getToken } = useCurrentUser();
+  const { isSuperAdmin, isCompanyAdmin, getToken } = useCurrentUser();
+  const { selectedCompanyId, setSelectedCompanyId, targetCompanyId } = useSelectedCompany();
   const { toast } = useToast();
 
   // ─── Single-company report state ─────────────────────────────────────────────
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(companyId ?? null);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<number[]>([]);
   const [reportTemplate, setReportTemplate] = useState<ReportTemplate>(GetCompanyReportExportTemplate.board_ready);
   const [exportFormat, setExportFormat] = useState<ReportExportFormat>(GetCompanyReportExportFormat.csv);
@@ -77,8 +78,6 @@ export default function ReportsPage() {
   const scoreByCompanyId: Record<number, number | null> = Object.fromEntries(
     (superAdminReport?.companySummaries ?? []).map((c) => [c.companyId, c.latestOverallScore ?? null]),
   );
-
-  const targetCompanyId = isSuperAdmin ? selectedCompanyId : companyId;
 
   const { data: report, isLoading } = useGetCompanyReport(
     targetCompanyId ?? 0,

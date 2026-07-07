@@ -48,7 +48,17 @@ const mock = vi.hoisted(() => {
       "createdAt",
       "updatedAt",
     ]),
-    invitationsTable: makeTable("invitations", ["id"]),
+    invitationsTable: makeTable("invitations", [
+      "id",
+      "email",
+      "role",
+      "companyId",
+      "token",
+      "status",
+      "invitedById",
+      "createdAt",
+      "expiresAt",
+    ]),
     domainsTable: makeTable("domains", ["id", "name", "description", "orderIndex"]),
     categoriesTable: makeTable("categories", ["id", "domainId", "name", "description", "orderIndex"]),
     criteriaTable: makeTable("criteria", [
@@ -138,6 +148,7 @@ const mock = vi.hoisted(() => {
   };
 
   const now = new Date("2026-01-01T00:00:00.000Z");
+  const clerkInvitationCreate = vi.fn(async () => ({ id: "clerk-invitation-test" }));
   const state: { authUserId: string; rows: Rows; nextIds: Record<string, number>; dbHealthy: boolean } = {
     authUserId: "clerk-super",
     rows: {},
@@ -441,12 +452,17 @@ const mock = vi.hoisted(() => {
 
   reset();
 
-  return { state, reset, tables, db, pool, eq, and, inArray, count, sql };
+  return { state, reset, tables, db, pool, eq, and, inArray, count, sql, clerkInvitationCreate };
 });
 
 vi.mock("@clerk/express", () => ({
   clerkMiddleware: () => (_req: any, _res: any, next: () => void) => next(),
   getAuth: () => ({ userId: mock.state.authUserId }),
+  createClerkClient: () => ({
+    invitations: {
+      createInvitation: mock.clerkInvitationCreate,
+    },
+  }),
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -467,10 +483,16 @@ function signInAs(clerkUserId: string) {
   mock.state.authUserId = clerkUserId;
 }
 
+afterEach(() => {
+  delete process.env.CLERK_SECRET_KEY;
+  delete process.env.PUBLIC_APP_URL;
+});
+
 describe("health checks", () => {
-  beforeEach(() => {
-    mock.reset();
-  });
+beforeEach(() => {
+  mock.reset();
+  mock.clerkInvitationCreate.mockClear();
+});
 
   it("reports healthy database connectivity without exposing sensitive configuration", async () => {
     mock.state.dbHealthy = true;
@@ -544,9 +566,14 @@ describe("tenant isolation and role permissions", () => {
       .send({ email: "new-super@example.test", role: "super_admin" });
     expect(escalationResponse.status).toBe(403);
 
-    const scopedResponse = await request(app)
+    const crossCompanyResponse = await request(app)
       .post("/api/invitations")
       .send({ email: "new-user@example.test", role: "company_user", companyId: 2 });
+    expect(crossCompanyResponse.status).toBe(403);
+
+    const scopedResponse = await request(app)
+      .post("/api/invitations")
+      .send({ email: "new-user@example.test", role: "company_user", companyId: 1 });
     expect(scopedResponse.status).toBe(201);
     expect(scopedResponse.body).toMatchObject({
       email: "new-user@example.test",
@@ -596,6 +623,103 @@ describe("tenant isolation and role permissions", () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("assessment company");
   });
+
+  it("enforces invitation role and company scope for Super Admin and Company Admin setup", async () => {
+    signInAs("clerk-admin-a");
+    expect(
+      (await request(app).post("/api/invitations").send({ email: "new-super@example.test", role: "super_admin" })).status,
+    ).toBe(403);
+    expect(
+      (await request(app).post("/api/invitations").send({ email: "admin-b-new@example.test", role: "company_admin", companyId: 2 })).status,
+    ).toBe(403);
+
+    const companyUserInvite = await request(app)
+      .post("/api/invitations")
+      .send({ email: "new-user-a@example.test", role: "company_user", companyId: 1 });
+    expect(companyUserInvite.status).toBe(201);
+    expect(companyUserInvite.body.companyId).toBe(1);
+
+    signInAs("clerk-super");
+    const missingCompanyResponse = await request(app)
+      .post("/api/invitations")
+      .send({ email: "missing-company@example.test", role: "company_admin" });
+    expect(missingCompanyResponse.status).toBe(400);
+
+    const superInvite = await request(app)
+      .post("/api/invitations")
+      .send({ email: "global-super@example.test", role: "super_admin", companyId: 1 });
+    expect(superInvite.status).toBe(201);
+    expect(superInvite.body.companyId).toBeNull();
+
+    const adminInvite = await request(app)
+      .post("/api/invitations")
+      .send({ email: "admin-b-new@example.test", role: "company_admin", companyId: 2 });
+    expect(adminInvite.status).toBe(201);
+    expect(adminInvite.body.companyId).toBe(2);
+  });
+
+  it("allows Super Admins to manage users globally while preserving company-admin scope", async () => {
+    signInAs("clerk-super");
+    const globalUsers = await request(app).get("/api/users");
+    expect(globalUsers.status).toBe(200);
+    expect(globalUsers.body.map((user: any) => user.id).sort()).toEqual([1, 2, 3, 4, 5]);
+
+    const reassignment = await request(app)
+      .patch("/api/users/3")
+      .send({ role: "company_admin", companyId: 2 });
+    expect(reassignment.status).toBe(200);
+    expect(reassignment.body.role).toBe("company_admin");
+    expect(reassignment.body.companyId).toBe(2);
+
+    signInAs("clerk-admin-a");
+    const scopedUsers = await request(app).get("/api/users");
+    expect(scopedUsers.status).toBe(200);
+    expect(scopedUsers.body.map((user: any) => user.companyId)).toEqual([1]);
+
+    const crossCompanyUpdate = await request(app).patch("/api/users/4").send({ isActive: false });
+    expect(crossCompanyUpdate.status).toBe(403);
+  });
+
+  it("prevents removing the final active Super Admin", async () => {
+    signInAs("clerk-super");
+
+    const deactivateResponse = await request(app).patch("/api/users/1").send({ isActive: false });
+    expect(deactivateResponse.status).toBe(400);
+    expect(deactivateResponse.body.error).toContain("final active Super Admin");
+
+    const demoteResponse = await request(app).patch("/api/users/1").send({ role: "company_admin", companyId: 1 });
+    expect(demoteResponse.status).toBe(400);
+    expect(demoteResponse.body.error).toContain("final active Super Admin");
+  });
+
+  it("triggers Clerk-managed password setup emails without exposing credentials", async () => {
+    signInAs("clerk-super");
+    process.env.CLERK_SECRET_KEY = "test-clerk-secret-route-validation";
+    process.env.PUBLIC_APP_URL = "https://app.example.test";
+
+    const response = await request(app).post("/api/users/3/password-reset");
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({
+      userId: 3,
+      email: "user-a@example.test",
+      provider: "clerk",
+      status: "requested",
+    });
+    expect(mock.clerkInvitationCreate).toHaveBeenCalledWith({
+      emailAddress: "user-a@example.test",
+      ignoreExisting: true,
+      notify: true,
+      redirectUrl: "https://app.example.test/sign-in",
+    });
+    expect(JSON.stringify(response.body)).not.toContain("token");
+
+    signInAs("clerk-admin-a");
+    const crossCompanyResponse = await request(app).post("/api/users/5/password-reset");
+    expect(crossCompanyResponse.status).toBe(403);
+
+    delete process.env.CLERK_SECRET_KEY;
+    delete process.env.PUBLIC_APP_URL;
+  });
 });
 
 describe("company info", () => {
@@ -629,6 +753,18 @@ describe("company info", () => {
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.currentStatusDescription).toBe("Super Admin updated current status.");
     expect(updateResponse.body.currentChallenges).toEqual(["Long lead times", "Production under-utilisation"]);
+  });
+
+  it("keeps company deactivation as a Super Admin-only soft-delete operation", async () => {
+    signInAs("clerk-admin-a");
+    const companyAdminResponse = await request(app).patch("/api/companies/1").send({ isActive: false });
+    expect(companyAdminResponse.status).toBe(200);
+    expect(companyAdminResponse.body.isActive).toBe(true);
+
+    signInAs("clerk-super");
+    const superAdminResponse = await request(app).patch("/api/companies/1").send({ isActive: false });
+    expect(superAdminResponse.status).toBe(200);
+    expect(superAdminResponse.body.isActive).toBe(false);
   });
 
   it("allows Company Admins to update only their own company info and records audit events", async () => {
@@ -751,6 +887,45 @@ describe("assessment lifecycle", () => {
     expect(
       (await request(app).post("/api/scores").send({ assessmentId, scores: [{ criterionId: 1, score: 4 }] })).status,
     ).toBe(400);
+  });
+
+  it("allows Super Admins to score and complete a selected company assessment without prior assignment", async () => {
+    signInAs("clerk-super");
+    const createResponse = await request(app)
+      .post("/api/assessments")
+      .send({ companyId: 2, name: "Super Admin Controlled Assessment", description: "Setup on behalf of Beta" });
+    expect(createResponse.status).toBe(201);
+    const assessmentId = createResponse.body.id;
+
+    await request(app).patch(`/api/assessments/${assessmentId}`).send({ status: "active" }).expect(200);
+
+    const scoreResponse = await request(app).post("/api/scores").send({
+      assessmentId,
+      scores: [
+        { criterionId: 1, score: 3, notes: "Super Admin score" },
+        { criterionId: 2, score: 3, notes: "Super Admin score" },
+        { criterionId: 3, score: 4, notes: "Super Admin score" },
+      ],
+    });
+    expect(scoreResponse.status).toBe(200);
+    expect(scoreResponse.body).toHaveLength(3);
+
+    const afterScores = await request(app).get(`/api/assessments/${assessmentId}`);
+    expect(afterScores.body.assignedUserIds).toEqual([1]);
+    expect(afterScores.body.completedUserIds).toEqual([1]);
+
+    const completeResponse = await request(app).patch(`/api/assessments/${assessmentId}`).send({ status: "completed" });
+    expect(completeResponse.status).toBe(200);
+    expect(completeResponse.body.status).toBe("completed");
+
+    const radarResponse = await request(app).get("/api/scores/radar").query({ assessmentId });
+    expect(radarResponse.status).toBe(200);
+    expect(radarResponse.body.series[0].scores).toEqual([3, 4]);
+
+    signInAs("clerk-user-a");
+    expect(
+      (await request(app).post("/api/scores").send({ assessmentId, scores: [{ criterionId: 1, score: 2 }] })).status,
+    ).toBe(403);
   });
 });
 
@@ -1040,6 +1215,56 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect((await request(app).get("/api/actions/summary").query({ companyId: 2 })).status).toBe(403);
   });
 
+  it("allows Super Admins to manage actions across companies while blocking cross-company references", async () => {
+    signInAs("clerk-super");
+
+    const createResponse = await request(app).post("/api/actions").send({
+      companyId: 2,
+      assessmentId: 202,
+      domainId: 2,
+      title: "Super Admin action",
+      priority: "high",
+      assignedUserId: 5,
+    });
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.companyId).toBe(2);
+    expect(createResponse.body.assignedUserId).toBe(5);
+
+    const wrongAssessmentResponse = await request(app).post("/api/actions").send({
+      companyId: 2,
+      assessmentId: 103,
+      title: "Invalid assessment link",
+      priority: "medium",
+    });
+    expect(wrongAssessmentResponse.status).toBe(400);
+    expect(wrongAssessmentResponse.body.error).toContain("Assessment");
+
+    const wrongAssigneeResponse = await request(app).post("/api/actions").send({
+      companyId: 2,
+      title: "Invalid assignment",
+      priority: "medium",
+      assignedUserId: 3,
+    });
+    expect(wrongAssigneeResponse.status).toBe(400);
+    expect(wrongAssigneeResponse.body.error).toContain("Assigned user");
+
+    const filteredResponse = await request(app).get("/api/actions").query({ companyId: 2, assessmentId: 202 });
+    expect(filteredResponse.status).toBe(200);
+    expect(filteredResponse.body.every((action: any) => action.assessmentId === 202)).toBe(true);
+
+    const completeResponse = await request(app).patch("/api/actions/2").send({ status: "completed" });
+    expect(completeResponse.status).toBe(200);
+    expect(completeResponse.body.completedDate).toBeTruthy();
+
+    const reopenResponse = await request(app).patch("/api/actions/2").send({ status: "in_progress" });
+    expect(reopenResponse.status).toBe(200);
+    expect(reopenResponse.body.completedDate).toBeNull();
+
+    signInAs("clerk-admin-a");
+    const crossCompanyDeleteResponse = await request(app).delete("/api/actions/2");
+    expect(crossCompanyDeleteResponse.status).toBe(403);
+  });
+
   it("keeps Programme Intelligence restricted to Super Admins and returns filter metadata", async () => {
     signInAs("clerk-admin-a");
     expect((await request(app).get("/api/reports/programme")).status).toBe(403);
@@ -1115,7 +1340,7 @@ describe("audit logging foundation", () => {
         eventType: "action.updated",
         targetType: "action",
         metadata: expect.objectContaining({
-          changedFields: ["status"],
+          changedFields: ["status", "completedDate"],
           previousStatus: "in_progress",
           nextStatus: "completed",
         }),

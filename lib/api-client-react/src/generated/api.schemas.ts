@@ -199,15 +199,51 @@ export interface UserRole {
   companyName?: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type UpdateUserBodyRole =
+  | (typeof UpdateUserBodyRole)[keyof typeof UpdateUserBodyRole]
+  | null;
+
+export const UpdateUserBodyRole = {
+  super_admin: "super_admin",
+  company_admin: "company_admin",
+  company_user: "company_user",
+} as const;
+
 export interface UpdateUserBody {
   /** @nullable */
   firstName?: string | null;
   /** @nullable */
   lastName?: string | null;
   /** @nullable */
-  role?: string | null;
+  role?: UpdateUserBodyRole;
+  /** @nullable */
+  companyId?: number | null;
   /** @nullable */
   isActive?: boolean | null;
+}
+
+export type UserPasswordResetResponseProvider =
+  (typeof UserPasswordResetResponseProvider)[keyof typeof UserPasswordResetResponseProvider];
+
+export const UserPasswordResetResponseProvider = {
+  clerk: "clerk",
+} as const;
+
+export type UserPasswordResetResponseStatus =
+  (typeof UserPasswordResetResponseStatus)[keyof typeof UserPasswordResetResponseStatus];
+
+export const UserPasswordResetResponseStatus = {
+  requested: "requested",
+} as const;
+
+export interface UserPasswordResetResponse {
+  userId: number;
+  email: string;
+  provider: UserPasswordResetResponseProvider;
+  status: UserPasswordResetResponseStatus;
 }
 
 export type InvitationRole =
@@ -675,6 +711,31 @@ export interface ProgrammeIntelligenceReport {
   domains: string[];
 }
 
+export type ListUsersParams = {
+  /**
+   * @nullable
+   */
+  companyId?: number | null;
+  /**
+   * @nullable
+   */
+  role?: ListUsersRole;
+  /**
+   * @nullable
+   */
+  isActive?: boolean | null;
+};
+
+export type ListUsersRole =
+  | (typeof ListUsersRole)[keyof typeof ListUsersRole]
+  | null;
+
+export const ListUsersRole = {
+  super_admin: "super_admin",
+  company_admin: "company_admin",
+  company_user: "company_user",
+} as const;
+
 export type ListInvitationsParams = {
   /**
    * @nullable
@@ -732,6 +793,10 @@ export type ListActionsParams = {
    * @nullable
    */
   assignedUserId?: number | null;
+  /**
+   * @nullable
+   */
+  assessmentId?: number | null;
   /**
    * @nullable
    */

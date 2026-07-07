@@ -49,6 +49,7 @@ import type {
   ListInvitationsParams,
   ListScoresParams,
   ListTargetsParams,
+  ListUsersParams,
   MaturityTarget,
   ProgrammeIntelligenceReport,
   ProgressData,
@@ -62,6 +63,7 @@ import type {
   UpdateUserBody,
   UpsertMaturityTargetBody,
   User,
+  UserPasswordResetResponse,
   UserRole,
 } from "./api.schemas";
 
@@ -773,6 +775,100 @@ export function useGetMyRole<
 }
 
 /**
+ * @summary List users visible to the current administrator
+ */
+export const getListUsersUrl = (params?: ListUsersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/users?${stringifiedParams}`
+    : `/api/users`;
+};
+
+export const listUsers = async (
+  params?: ListUsersParams,
+  options?: RequestInit,
+): Promise<User[]> => {
+  return customFetch<User[]>(getListUsersUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListUsersQueryKey = (params?: ListUsersParams) => {
+  return [`/api/users`, ...(params ? [params] : [])] as const;
+};
+
+export const getListUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListUsersQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listUsers>>> = ({
+    signal,
+  }) => listUsers(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listUsers>>
+>;
+export type ListUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List users visible to the current administrator
+ */
+
+export function useListUsers<
+  TData = Awaited<ReturnType<typeof listUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListUsersQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary List users in a company
  */
 export const getListCompanyUsersUrl = (id: number) => {
@@ -1021,6 +1117,93 @@ export const useUpdateUser = <
   TContext
 > => {
   return useMutation(getUpdateUserMutationOptions(options));
+};
+
+/**
+ * @summary Trigger a Clerk-managed password setup/reset email
+ */
+export const getTriggerUserPasswordResetUrl = (id: number) => {
+  return `/api/users/${id}/password-reset`;
+};
+
+export const triggerUserPasswordReset = async (
+  id: number,
+  options?: RequestInit,
+): Promise<UserPasswordResetResponse> => {
+  return customFetch<UserPasswordResetResponse>(
+    getTriggerUserPasswordResetUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getTriggerUserPasswordResetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof triggerUserPasswordReset>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof triggerUserPasswordReset>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["triggerUserPasswordReset"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof triggerUserPasswordReset>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return triggerUserPasswordReset(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TriggerUserPasswordResetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof triggerUserPasswordReset>>
+>;
+
+export type TriggerUserPasswordResetMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Trigger a Clerk-managed password setup/reset email
+ */
+export const useTriggerUserPasswordReset = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof triggerUserPasswordReset>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof triggerUserPasswordReset>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getTriggerUserPasswordResetMutationOptions(options));
 };
 
 /**

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable, actionsTable, type Action } from "@workspace/db";
+import { usersTable, actionsTable, assessmentCyclesTable, type Action } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import {
   ListActionsResponse,
@@ -45,6 +45,24 @@ function canManageAction(currentUser: any, action: any) {
   if (currentUser.role === "super_admin") return true;
   if (currentUser.role === "company_admin" && currentUser.companyId === action.companyId) return true;
   return currentUser.id === action.assignedUserId && currentUser.companyId === action.companyId;
+}
+
+async function validateActionCompanyReferences(companyId: number, input: { assessmentId?: number | null; assignedUserId?: number | null }) {
+  if (input.assessmentId != null) {
+    const [assessment] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, input.assessmentId));
+    if (!assessment || assessment.companyId !== companyId) {
+      return "Assessment must belong to the action company";
+    }
+  }
+
+  if (input.assignedUserId != null) {
+    const [assignedUser] = await db.select().from(usersTable).where(eq(usersTable.id, input.assignedUserId));
+    if (!assignedUser || assignedUser.companyId !== companyId || !assignedUser.isActive) {
+      return "Assigned user must be an active user in the action company";
+    }
+  }
+
+  return null;
 }
 
 // GET /actions/summary
@@ -94,6 +112,9 @@ router.get("/actions", requireAuth, async (req: any, res): Promise<void> => {
   if (queryParams.data.assignedUserId) {
     actions = (actions as any[]).filter((a: any) => a.assignedUserId === queryParams.data.assignedUserId);
   }
+  if (queryParams.data.assessmentId) {
+    actions = (actions as any[]).filter((a: any) => a.assessmentId === queryParams.data.assessmentId);
+  }
   if (queryParams.data.status) {
     actions = (actions as any[]).filter((a: any) => a.status === queryParams.data.status);
   }
@@ -112,6 +133,14 @@ router.post("/actions", requireAuth, async (req: any, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   if (currentUser.role === "company_admin" && currentUser.companyId !== parsed.data.companyId) {
     res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const referenceError = await validateActionCompanyReferences(parsed.data.companyId, {
+    assessmentId: parsed.data.assessmentId,
+    assignedUserId: parsed.data.assignedUserId,
+  });
+  if (referenceError) {
+    res.status(400).json({ error: referenceError });
     return;
   }
 
@@ -188,6 +217,16 @@ router.patch("/actions/:id", requireAuth, async (req: any, res): Promise<void> =
   if (parsed.data.assignedUserId !== undefined) updates.assignedUserId = parsed.data.assignedUserId;
   if (parsed.data.dueDate !== undefined) updates.dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
   if (parsed.data.completedDate !== undefined) updates.completedDate = parsed.data.completedDate ? new Date(parsed.data.completedDate) : null;
+  if (updates.status === "completed" && parsed.data.completedDate === undefined) updates.completedDate = new Date();
+  if (updates.status != null && updates.status !== "completed" && parsed.data.completedDate === undefined) updates.completedDate = null;
+
+  const referenceError = await validateActionCompanyReferences(existingAction.companyId, {
+    assignedUserId: Object.prototype.hasOwnProperty.call(updates, "assignedUserId") ? updates.assignedUserId : existingAction.assignedUserId,
+  });
+  if (referenceError) {
+    res.status(400).json({ error: referenceError });
+    return;
+  }
 
   const previousStatus = existingAction.status;
   const previousPriority = existingAction.priority;

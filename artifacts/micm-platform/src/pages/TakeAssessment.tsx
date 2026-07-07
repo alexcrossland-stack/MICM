@@ -1,6 +1,7 @@
 import { useRoute, useLocation } from "wouter";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { useGetAssessment, useListDomains, useListScores, useSubmitScores } from "@workspace/api-client-react";
+import { companyScopedPath } from "@/hooks/useSelectedCompany";
+import { useGetAssessment, useListDomains, useListScores, useSubmitScores, useUpdateAssessment } from "@workspace/api-client-react";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export default function TakeAssessmentPage() {
   const [, params] = useRoute("/assessments/:id/take");
   const id = Number(params?.id);
   const [, navigate] = useLocation();
-  const { userId } = useCurrentUser();
+  const { userId, isSuperAdmin } = useCurrentUser();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [domainIdx, setDomainIdx] = useState(0);
@@ -39,6 +40,7 @@ export default function TakeAssessmentPage() {
     { query: { enabled: !!userId } as any }
   );
   const { mutateAsync: submitScores } = useSubmitScores();
+  const { mutateAsync: updateAssessment } = useUpdateAssessment();
 
   useEffect(() => {
     if (existingScores) {
@@ -79,7 +81,17 @@ export default function TakeAssessmentPage() {
       }
 
       if (final) {
-        toast({ title: "Assessment saved!", description: `${scoredCount} of ${totalCriteria} criteria scored.` });
+        const finalScoredCount = Object.keys(scores).length;
+        if (isSuperAdmin && finalScoredCount === totalCriteria) {
+          await updateAssessment({ id, data: { status: "completed" } });
+          toast({
+            title: "Assessment completed",
+            description: "Gap Analysis is now available for this company.",
+          });
+          navigate(companyScopedPath("/analytics", assessment?.companyId));
+          return;
+        }
+        toast({ title: "Assessment saved!", description: `${finalScoredCount} of ${totalCriteria} criteria scored.` });
         navigate(`/assessments/${id}`);
       }
     } catch (e: any) {
