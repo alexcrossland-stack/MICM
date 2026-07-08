@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { companyScopedPath, useSelectedCompany } from "@/hooks/useSelectedCompany";
-import { useListAssessments, useCreateAssessment, useListCompanies } from "@workspace/api-client-react";
+import { getListAssessmentsQueryKey, useListAssessments, useCreateAssessment, useListCompanies } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -49,7 +49,7 @@ export default function AssessmentsPage() {
           endDate: form.endDate || undefined,
         },
       });
-      qc.invalidateQueries({ queryKey: ["/assessments"] });
+      await qc.invalidateQueries({ queryKey: getListAssessmentsQueryKey() });
       setCreateOpen(false);
       setForm({ name: "", description: "", startDate: "", endDate: "" });
       toast({ title: "Assessment created" });

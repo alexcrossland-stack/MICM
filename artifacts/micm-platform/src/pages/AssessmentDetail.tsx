@@ -12,6 +12,10 @@ import {
   useListScores,
   useListCriterionNotes,
   useCreateCriterionNote,
+  getGetAssessmentResultsQueryKey,
+  getGetCompanyReportQueryKey,
+  getGetRadarDataQueryKey,
+  getListCriterionNotesQueryKey,
   type CriterionNote,
   type Domain,
   type Score,
@@ -19,7 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -167,6 +171,17 @@ export default function AssessmentDetailPage() {
   );
   const { mutateAsync: createCriterionNote, isPending: creatingNote } = useCreateCriterionNote();
 
+  useEffect(() => {
+    if (!selectedCriterionId) return;
+    const criterionId = Number(selectedCriterionId);
+    const criterionStillExists = (domains ?? []).some((domain) =>
+      domain.categories.some((category) =>
+        category.criteria.some((criterion) => criterion.id === criterionId),
+      ),
+    );
+    if (!criterionStillExists) setSelectedCriterionId("");
+  }, [domains, selectedCriterionId]);
+
   if (isLoading || !assessment) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   const isMyCompleted = userId != null && assessment.completedUserIds?.includes(userId);
@@ -236,12 +251,26 @@ export default function AssessmentDetailPage() {
     const criterionId = Number(selectedCriterionId);
     const note = noteText.trim();
     if (!criterionId || !note) return;
+    const submittedCriterion = criterionById.get(criterionId);
+    if (!submittedCriterion) {
+      setNoteStatus("Select a valid criterion before saving the note.");
+      return;
+    }
     setNoteStatus(null);
     try {
-      await createCriterionNote({ data: { assessmentId: id, criterionId, note } });
+      const savedNote = await createCriterionNote({ data: { assessmentId: id, criterionId, note } });
+      if (savedNote.criterionId !== criterionId) {
+        throw new Error("Evidence note was saved against a different criterion. Refresh and try again.");
+      }
       setNoteText("");
-      setNoteStatus("Evidence note saved.");
-      qc.invalidateQueries();
+      setSelectedCriterionId("");
+      setNoteStatus(`Evidence note saved for ${submittedCriterion.domainName} / ${submittedCriterion.name}.`);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getListCriterionNotesQueryKey({ assessmentId: id }) }),
+        qc.invalidateQueries({ queryKey: getGetAssessmentResultsQueryKey(id) }),
+        qc.invalidateQueries({ queryKey: getGetRadarDataQueryKey({ assessmentId: id }) }),
+        qc.invalidateQueries({ queryKey: getGetCompanyReportQueryKey(assessmentCompanyId) }),
+      ]);
       toast({ title: "Evidence note saved" });
     } catch (e: any) {
       const message = e?.response?.status === 403

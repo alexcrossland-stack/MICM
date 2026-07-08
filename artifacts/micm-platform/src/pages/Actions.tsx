@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useSelectedCompany } from "@/hooks/useSelectedCompany";
-import { useListActions, useCreateAction, useUpdateAction, useDeleteAction, useListDomains, useListCompanies, useListUsers, useListAssessments } from "@workspace/api-client-react";
+import { getListActionsQueryKey, useListActions, useCreateAction, useUpdateAction, useDeleteAction, useListDomains, useListCompanies, useListUsers, useListAssessments } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -135,7 +135,7 @@ export default function ActionsPage() {
         });
         toast({ title: "Action created" });
       }
-      qc.invalidateQueries({ queryKey: ["/actions"] });
+      await qc.invalidateQueries({ queryKey: getListActionsQueryKey() });
       setCreateOpen(false);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -145,7 +145,7 @@ export default function ActionsPage() {
   async function handleDelete(id: number) {
     if (!confirm("Delete this action?")) return;
     await deleteAction({ id });
-    qc.invalidateQueries({ queryKey: ["/actions"] });
+    await qc.invalidateQueries({ queryKey: getListActionsQueryKey() });
     toast({ title: "Action deleted" });
   }
 
