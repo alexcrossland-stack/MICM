@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Building2, Pencil, Archive, RotateCcw } from "lucide-react";
+import { Plus, Building2, Pencil, Archive, RotateCcw, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 
 const SECTORS = ["Manufacturing", "Engineering", "Automotive", "Aerospace", "Food & Drink", "Pharmaceutical", "Electronics", "Defence", "Other"];
@@ -18,6 +18,10 @@ const SIZES = ["1-9", "10-49", "50-249", "250-999", "1000+"];
 
 type CompanyForm = { name: string; sector: string; size: string; contactEmail: string };
 const emptyForm: CompanyForm = { name: "", sector: "", size: "", contactEmail: "" };
+
+export function companyArchiveConfirmationMatches(companyName: string, confirmation: string) {
+  return confirmation.trim() === companyName;
+}
 
 export default function CompaniesPage() {
   const { isSuperAdmin } = useCurrentUser();
@@ -28,6 +32,8 @@ export default function CompaniesPage() {
   const [editCompany, setEditCompany] = useState<any>(null);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
   const [showArchived, setShowArchived] = useState(false);
+  const [archiveCompany, setArchiveCompany] = useState<any>(null);
+  const [archiveConfirmation, setArchiveConfirmation] = useState("");
 
   const { data: companies, isLoading } = useListCompanies(
     { isActive: showArchived ? false : true },
@@ -70,21 +76,30 @@ export default function CompaniesPage() {
     }
   }
 
-  async function handleToggleActive(company: any) {
+  function openArchiveDialog(company: any) {
+    setArchiveCompany(company);
+    setArchiveConfirmation("");
+  }
+
+  async function handleToggleActive() {
+    if (!archiveCompany) return;
+    const company = archiveCompany;
     const nextActive = !company.isActive;
-    const action = nextActive ? "reactivate" : "archive";
-    const message = nextActive
-      ? `Reactivate ${company.name}? It will appear in normal company selectors and lists again.`
-      : `Archive ${company.name}? Existing assessments, actions, reports, and audit history will be preserved. The company will be hidden from normal selectors and lists.`;
-    if (!confirm(message)) return;
     try {
       await updateCompany({ id: company.id, data: { isActive: nextActive } });
       qc.invalidateQueries();
       toast({ title: nextActive ? "Company reactivated" : "Company archived" });
+      setArchiveCompany(null);
+      setArchiveConfirmation("");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   }
+
+  const archiveAction = archiveCompany?.isActive ? "Archive" : "Reactivate";
+  const archiveConfirmationValid = archiveCompany
+    ? companyArchiveConfirmationMatches(archiveCompany.name, archiveConfirmation)
+    : false;
 
   return (
     <div className="space-y-6">
@@ -135,7 +150,13 @@ export default function CompaniesPage() {
                     <Button variant="ghost" size="sm" onClick={() => openEdit(co)} className="h-7 w-7 p-0">
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant={co.isActive ? "destructive" : "outline"} size="sm" onClick={() => handleToggleActive(co)} className="h-7 text-xs gap-1">
+                    <Button
+                      variant={co.isActive ? "destructive" : "outline"}
+                      size="sm"
+                      onClick={() => openArchiveDialog(co)}
+                      className="h-7 text-xs gap-1"
+                      aria-label={`${co.isActive ? "Archive" : "Reactivate"} company ${co.name}`}
+                    >
                       {co.isActive ? <Archive className="w-3 h-3" /> : <RotateCcw className="w-3 h-3" />}
                       {co.isActive ? "Archive" : "Reactivate"}
                     </Button>
@@ -200,6 +221,68 @@ export default function CompaniesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={!form.name.trim() || !form.sector || !form.size || creating || updating}>{editCompany ? "Save" : "Create"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!archiveCompany} onOpenChange={(open) => {
+        if (!open) {
+          setArchiveCompany(null);
+          setArchiveConfirmation("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              {archiveAction} company: {archiveCompany?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {archiveCompany && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                {archiveCompany.isActive ? (
+                  <p>
+                    Archiving <span className="font-semibold">{archiveCompany.name}</span> will hide it from normal company selectors and lists. Existing assessments, actions, reports, and audit history will be preserved.
+                  </p>
+                ) : (
+                  <p>
+                    Reactivating <span className="font-semibold">{archiveCompany.name}</span> will make it available in normal company selectors and lists again.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company-archive-confirmation">
+                  Type the company name to confirm
+                </Label>
+                <Input
+                  id="company-archive-confirmation"
+                  value={archiveConfirmation}
+                  onChange={(event) => setArchiveConfirmation(event.target.value)}
+                  placeholder={archiveCompany.name}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setArchiveCompany(null);
+                setArchiveConfirmation("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={archiveCompany?.isActive ? "destructive" : "default"}
+              onClick={handleToggleActive}
+              disabled={!archiveConfirmationValid || updating}
+              className="gap-2"
+            >
+              {archiveCompany?.isActive ? <Archive className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
+              {archiveAction} {archiveCompany?.name}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

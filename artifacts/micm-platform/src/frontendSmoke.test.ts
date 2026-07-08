@@ -377,6 +377,7 @@ vi.mock("@workspace/api-client-react", () => {
       executive_summary: "executive_summary",
     },
     useAssignAssessment: () => result(undefined),
+    useCreateCompany: () => result(undefined),
     useCreateCriterionNote: () => result(undefined),
     useGetAssessment: () => result(assessments[0]),
     useGetAssessmentResults: () => result(companyReport.latestResults),
@@ -459,9 +460,10 @@ vi.mock("@workspace/api-client-react", () => {
 
 import AppShell from "./components/AppShell";
 import AnalyticsPage from "./pages/Analytics";
-import AssessmentDetailPage from "./pages/AssessmentDetail";
+import AssessmentDetailPage, { getAssignableAssessmentUsers } from "./pages/AssessmentDetail";
 import AuditLogsPage from "./pages/AuditLogs";
 import CompanyInfoPage from "./pages/CompanyInfo";
+import CompaniesPage, { companyArchiveConfirmationMatches } from "./pages/Companies";
 import Dashboard from "./pages/Dashboard";
 import ProgrammePage from "./pages/Programme";
 import ReportsPage from "./pages/Reports";
@@ -638,5 +640,25 @@ describe("frontend smoke coverage", () => {
     expect(unassignedUserAssessment).toContain("Active shop-floor assessment");
     expect(unassignedUserAssessment).not.toContain("Evidence notes");
     expect(unassignedUserAssessment).not.toContain("Add note");
+  });
+
+  it("guards company archive actions with company-specific confirmation", () => {
+    setRole("super_admin", 1);
+    const companiesPage = render(React.createElement(CompaniesPage));
+
+    expect(companiesPage).toContain("aria-label=\"Archive company Acme Precision\"");
+    expect(companyArchiveConfirmationMatches("Acme Precision", "Acme Precision")).toBe(true);
+    expect(companyArchiveConfirmationMatches("Acme Precision", "Beta Fabrication")).toBe(false);
+    expect(companyArchiveConfirmationMatches("Acme Precision", " Acme Precision ")).toBe(true);
+  });
+
+  it("limits assessment assignment options to active company users", () => {
+    const assignableUsers = getAssignableAssessmentUsers([
+      { id: 2, email: "admin@acme.test", isActive: true },
+      { id: 3, email: "inactive@acme.test", isActive: false },
+      { id: 4, email: "legacy-active-without-flag@acme.test" },
+    ]);
+
+    expect(assignableUsers.map((user) => user.id)).toEqual([2, 4]);
   });
 });

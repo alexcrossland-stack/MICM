@@ -128,6 +128,10 @@ function buildMissingScoreSections(
   });
 }
 
+export function getAssignableAssessmentUsers(users: any[] | undefined) {
+  return (users ?? []).filter((user) => user.isActive !== false);
+}
+
 export default function AssessmentDetailPage() {
   const [, params] = useRoute("/assessments/:id");
   const id = Number(params?.id);
@@ -204,6 +208,7 @@ export default function AssessmentDetailPage() {
     : [];
   const displayedMissingScoreSections = apiMissingScoreSections.length > 0 ? apiMissingScoreSections : missingScoreSections;
   const canMarkComplete = !scoresLoading && !domainsLoading && displayedMissingScoreSections.length === 0;
+  const assignableUsers = getAssignableAssessmentUsers(users);
 
   const radarChartData = radarData ? radarData.domains.map((name: string, i: number) => {
     const point: any = { domain: name };
@@ -550,7 +555,12 @@ export default function AssessmentDetailPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Assign Users</DialogTitle></DialogHeader>
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {users?.map((u: any) => (
+            {assignableUsers.length === 0 && (
+              <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                No active users are available for this assessment company.
+              </div>
+            )}
+            {assignableUsers.map((u: any) => (
               <label key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted cursor-pointer">
                 <Checkbox
                   checked={selectedUsers.includes(u.id)}
