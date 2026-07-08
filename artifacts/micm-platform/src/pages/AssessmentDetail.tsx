@@ -28,7 +28,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
@@ -506,18 +505,19 @@ export default function AssessmentDetailPage() {
             <div className="grid gap-3 border-t border-border pt-4">
               <div className="grid gap-1.5">
                 <Label>Criterion</Label>
-                <Select value={selectedCriterionId} onValueChange={setSelectedCriterionId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select criterion" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {criterionOptions.map((criterion) => (
-                      <SelectItem key={criterion.id} value={String(criterion.id)}>
-                        {criterion.domainName} / {criterion.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={selectedCriterionId}
+                  onChange={(event) => setSelectedCriterionId(event.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="evidence-note-criterion-select"
+                >
+                  <option value="">Select criterion</option>
+                  {criterionOptions.map((criterion) => (
+                    <option key={criterion.id} value={String(criterion.id)}>
+                      {criterion.domainName} / {criterion.categoryName} / {criterion.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-1.5">
                 <Label>Evidence note</Label>

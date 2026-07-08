@@ -606,6 +606,7 @@ describe("frontend smoke coverage", () => {
     expect(assignedUserAssessment).toContain("Active shop-floor assessment");
     expect(assignedUserAssessment).toContain("Evidence notes");
     expect(assignedUserAssessment).toContain("Evidence note from shop-floor review");
+    expect(assignedUserAssessment).toContain("Strategy / Leadership / Daily management");
     expect(assignedUserAssessment).toContain("Add note");
 
     setRole("company_user", 99);
