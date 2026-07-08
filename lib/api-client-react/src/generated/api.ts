@@ -24,6 +24,8 @@ import type {
   AssessmentResults,
   AssignAssessmentBody,
   AuditLog,
+  CleanupCompanyBody,
+  CleanupCompanyResponse,
   Company,
   CompanyDashboard,
   CompanyReport,
@@ -504,6 +506,93 @@ export const useUpdateCompany = <
   TContext
 > => {
   return useMutation(getUpdateCompanyMutationOptions(options));
+};
+
+/**
+ * @summary Soft-clean a company and associated live-facing records
+ */
+export const getCleanupCompanyUrl = (id: number) => {
+  return `/api/companies/${id}/cleanup`;
+};
+
+export const cleanupCompany = async (
+  id: number,
+  cleanupCompanyBody: CleanupCompanyBody,
+  options?: RequestInit,
+): Promise<CleanupCompanyResponse> => {
+  return customFetch<CleanupCompanyResponse>(getCleanupCompanyUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(cleanupCompanyBody),
+  });
+};
+
+export const getCleanupCompanyMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupCompany>>,
+    TError,
+    { id: number; data: BodyType<CleanupCompanyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cleanupCompany>>,
+  TError,
+  { id: number; data: BodyType<CleanupCompanyBody> },
+  TContext
+> => {
+  const mutationKey = ["cleanupCompany"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cleanupCompany>>,
+    { id: number; data: BodyType<CleanupCompanyBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return cleanupCompany(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CleanupCompanyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cleanupCompany>>
+>;
+export type CleanupCompanyMutationBody = BodyType<CleanupCompanyBody>;
+export type CleanupCompanyMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Soft-clean a company and associated live-facing records
+ */
+export const useCleanupCompany = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupCompany>>,
+    TError,
+    { id: number; data: BodyType<CleanupCompanyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cleanupCompany>>,
+  TError,
+  { id: number; data: BodyType<CleanupCompanyBody> },
+  TContext
+> => {
+  return useMutation(getCleanupCompanyMutationOptions(options));
 };
 
 /**

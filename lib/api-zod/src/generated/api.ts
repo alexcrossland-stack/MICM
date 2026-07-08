@@ -317,6 +317,44 @@ export const UpdateCompanyResponse = zod.object({
 });
 
 /**
+ * @summary Soft-clean a company and associated live-facing records
+ */
+export const CleanupCompanyParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CleanupCompanyBody = zod.object({
+  confirmCompanyName: zod.string(),
+  dryRun: zod.boolean().optional(),
+});
+
+export const CleanupCompanyResponse = zod.object({
+  companyId: zod.number(),
+  companyName: zod.string(),
+  dryRun: zod.boolean(),
+  companyArchived: zod.boolean(),
+  usersDeactivated: zod.number(),
+  invitationsExpired: zod.number(),
+  preserved: zod.object({
+    assessments: zod.number(),
+    scores: zod.number(),
+    evidenceNotes: zod.number(),
+    actions: zod.number(),
+    auditLogs: zod.number(),
+  }),
+  counts: zod.object({
+    users: zod.number(),
+    activeUsers: zod.number(),
+    pendingInvitations: zod.number(),
+    assessments: zod.number(),
+    scores: zod.number(),
+    evidenceNotes: zod.number(),
+    actions: zod.number(),
+    auditLogs: zod.number(),
+  }),
+});
+
+/**
  * @summary Get company dashboard summary
  */
 export const GetCompanyDashboardParams = zod.object({

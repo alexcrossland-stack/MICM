@@ -7,13 +7,23 @@ import { GetMeResponse, GetMyRoleResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-export const requireAuth = (req: any, res: any, next: any) => {
+export const requireAuth = async (req: any, res: any, next: any) => {
   const auth = getAuth(req);
   const userId = auth?.userId;
   if (!userId) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.clerkUserId, userId));
+
+  if (user && !user.isActive) {
+    res.status(403).json({ error: "User account is inactive" });
+    return;
+  }
+
   req.clerkUserId = userId;
   next();
 };

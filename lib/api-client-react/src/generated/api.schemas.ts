@@ -152,6 +152,41 @@ export interface UpdateCompanyBody {
   isActive?: boolean | null;
 }
 
+export interface CleanupCompanyBody {
+  confirmCompanyName: string;
+  dryRun?: boolean;
+}
+
+export interface CleanupCompanyCounts {
+  users: number;
+  activeUsers: number;
+  pendingInvitations: number;
+  assessments: number;
+  scores: number;
+  evidenceNotes: number;
+  actions: number;
+  auditLogs: number;
+}
+
+export type CleanupCompanyResponsePreserved = {
+  assessments: number;
+  scores: number;
+  evidenceNotes: number;
+  actions: number;
+  auditLogs: number;
+};
+
+export interface CleanupCompanyResponse {
+  companyId: number;
+  companyName: string;
+  dryRun: boolean;
+  companyArchived: boolean;
+  usersDeactivated: number;
+  invitationsExpired: number;
+  preserved: CleanupCompanyResponsePreserved;
+  counts: CleanupCompanyCounts;
+}
+
 export interface DomainSummary {
   domainId: number;
   domainName: string;

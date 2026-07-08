@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { companiesTable, usersTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable } from "@workspace/db";
+import { companiesTable, usersTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable, invitationsTable, criterionNotesTable, auditLogsTable } from "@workspace/db";
 import { eq, and, count, sql, inArray } from "drizzle-orm";
 import {
   ListCompaniesResponse,
@@ -13,6 +13,9 @@ import {
   GetCompanyDashboardParams,
   GetCompanyDashboardResponse,
   GetMyCompanyResponse,
+  CleanupCompanyBody,
+  CleanupCompanyParams,
+  CleanupCompanyResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
 import { recordAuditEvent } from "../lib/audit";
@@ -49,6 +52,85 @@ function parseOptionalBooleanQuery(value: unknown): { success: true; value?: boo
   if (value === "true") return { success: true, value: true };
   if (value === "false") return { success: true, value: false };
   return { success: false };
+}
+
+async function getCompanyCleanupSummary(companyId: number) {
+  const [
+    companyUsers,
+    pendingInvitations,
+    assessments,
+    evidenceNotes,
+    actions,
+    auditLogs,
+  ] = await Promise.all([
+    db.select().from(usersTable).where(eq(usersTable.companyId, companyId)),
+    db.select().from(invitationsTable).where(and(eq(invitationsTable.companyId, companyId), eq(invitationsTable.status, "pending"))),
+    db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, companyId)),
+    db.select().from(criterionNotesTable).where(eq(criterionNotesTable.companyId, companyId)),
+    db.select().from(actionsTable).where(eq(actionsTable.companyId, companyId)),
+    db.select().from(auditLogsTable).where(eq(auditLogsTable.companyId, companyId)),
+  ]);
+  const assessmentIds = assessments.map((assessment) => assessment.id);
+  const scores = assessmentIds.length > 0
+    ? await db.select().from(scoresTable).where(inArray(scoresTable.assessmentId, assessmentIds))
+    : [];
+  const activeCompanyUsers = companyUsers.filter((user) => user.isActive);
+
+  return {
+    companyUsers,
+    activeCompanyUsers,
+    pendingInvitations,
+    assessments,
+    scores,
+    evidenceNotes,
+    actions,
+    auditLogs,
+    counts: {
+      users: companyUsers.length,
+      activeUsers: activeCompanyUsers.length,
+      pendingInvitations: pendingInvitations.length,
+      assessments: assessments.length,
+      scores: scores.length,
+      evidenceNotes: evidenceNotes.length,
+      actions: actions.length,
+      auditLogs: auditLogs.length,
+    },
+  };
+}
+
+function formatCompanyCleanupResponse(input: {
+  company: any;
+  dryRun: boolean;
+  companyArchived: boolean;
+  usersDeactivated: number;
+  invitationsExpired: number;
+  counts: {
+    users: number;
+    activeUsers: number;
+    pendingInvitations: number;
+    assessments: number;
+    scores: number;
+    evidenceNotes: number;
+    actions: number;
+    auditLogs: number;
+  };
+}) {
+  return CleanupCompanyResponse.parse({
+    companyId: input.company.id,
+    companyName: input.company.name,
+    dryRun: input.dryRun,
+    companyArchived: input.companyArchived,
+    usersDeactivated: input.usersDeactivated,
+    invitationsExpired: input.invitationsExpired,
+    preserved: {
+      assessments: input.counts.assessments,
+      scores: input.counts.scores,
+      evidenceNotes: input.counts.evidenceNotes,
+      actions: input.counts.actions,
+      auditLogs: input.counts.auditLogs,
+    },
+    counts: input.counts,
+  });
 }
 
 // GET /companies - Super Admin only
@@ -280,6 +362,99 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
     });
   }
   res.json(GetCompanyResponse.parse(formatCompany(company)));
+});
+
+// POST /companies/:id/cleanup
+router.post("/companies/:id/cleanup", requireAuth, async (req: any, res): Promise<void> => {
+  const params = CleanupCompanyParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
+  if (!currentUser || currentUser.role !== "super_admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const parsed = CleanupCompanyBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, params.data.id));
+  if (!company) {
+    res.status(404).json({ error: "Company not found" });
+    return;
+  }
+
+  if (parsed.data.confirmCompanyName.trim() !== company.name) {
+    res.status(400).json({ error: "Company name confirmation does not match" });
+    return;
+  }
+
+  const summary = await getCompanyCleanupSummary(company.id);
+  const isDryRun = parsed.data.dryRun === true;
+  if (isDryRun) {
+    res.json(formatCompanyCleanupResponse({
+      company,
+      dryRun: true,
+      companyArchived: false,
+      usersDeactivated: 0,
+      invitationsExpired: 0,
+      counts: summary.counts,
+    }));
+    return;
+  }
+
+  let companyArchived = false;
+  if (company.isActive) {
+    await db.update(companiesTable).set({ isActive: false }).where(eq(companiesTable.id, company.id));
+    companyArchived = true;
+  }
+
+  let usersDeactivated = 0;
+  for (const user of summary.activeCompanyUsers) {
+    await db.update(usersTable).set({ isActive: false }).where(eq(usersTable.id, user.id));
+    usersDeactivated += 1;
+  }
+
+  let invitationsExpired = 0;
+  if (summary.pendingInvitations.length > 0) {
+    await db
+      .update(invitationsTable)
+      .set({ status: "expired" })
+      .where(and(eq(invitationsTable.companyId, company.id), eq(invitationsTable.status, "pending")));
+    invitationsExpired = summary.pendingInvitations.length;
+  }
+
+  await recordAuditEvent(req, {
+    currentUser,
+    eventType: "company.cleanup_archived",
+    companyId: company.id,
+    targetType: "company",
+    targetId: company.id,
+    metadata: {
+      companyArchived,
+      usersDeactivated,
+      invitationsExpired,
+      preserved: {
+        assessments: summary.counts.assessments,
+        scores: summary.counts.scores,
+        evidenceNotes: summary.counts.evidenceNotes,
+        actions: summary.counts.actions,
+        auditLogs: summary.counts.auditLogs,
+      },
+    },
+  });
+
+  res.json(formatCompanyCleanupResponse({
+    company: { ...company, isActive: false },
+    dryRun: false,
+    companyArchived,
+    usersDeactivated,
+    invitationsExpired,
+    counts: summary.counts,
+  }));
 });
 
 // GET /companies/:id/dashboard

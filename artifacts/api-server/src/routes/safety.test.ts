@@ -562,6 +562,89 @@ describe("tenant isolation and role permissions", () => {
     expect((await request(app).get("/api/companies")).status).toBe(403);
   });
 
+  it("allows only Super Admins to soft-clean companies with exact-name confirmation", async () => {
+    mock.state.rows.invitations.push({
+      id: 1,
+      email: "pending-user@example.test",
+      role: "company_user",
+      companyId: 1,
+      token: "pending-invitation-token",
+      status: "pending",
+      invitedById: 1,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      expiresAt: new Date("2026-02-01T00:00:00.000Z"),
+    });
+
+    signInAs("clerk-admin-a");
+    const forbiddenResponse = await request(app)
+      .post("/api/companies/1/cleanup")
+      .send({ confirmCompanyName: "Acme Precision" });
+    expect(forbiddenResponse.status).toBe(403);
+
+    signInAs("clerk-super");
+    const mismatchResponse = await request(app)
+      .post("/api/companies/1/cleanup")
+      .send({ confirmCompanyName: "Wrong Company" });
+    expect(mismatchResponse.status).toBe(400);
+    expect(mismatchResponse.body.error).toContain("confirmation");
+
+    const dryRunResponse = await request(app)
+      .post("/api/companies/1/cleanup")
+      .send({ confirmCompanyName: "Acme Precision", dryRun: true });
+    expect(dryRunResponse.status).toBe(200);
+    expect(dryRunResponse.body).toMatchObject({
+      companyId: 1,
+      companyName: "Acme Precision",
+      dryRun: true,
+      companyArchived: false,
+      usersDeactivated: 0,
+      invitationsExpired: 0,
+      counts: {
+        users: 2,
+        activeUsers: 2,
+        pendingInvitations: 1,
+        assessments: 3,
+        scores: 3,
+        evidenceNotes: 1,
+        actions: 1,
+      },
+    });
+    expect(mock.state.rows.companies.find((company) => company.id === 1)?.isActive).toBe(true);
+    expect(mock.state.rows.users.filter((user) => user.companyId === 1 && user.isActive)).toHaveLength(2);
+    expect(mock.state.rows.invitations.find((invitation) => invitation.id === 1)?.status).toBe("pending");
+
+    const cleanupResponse = await request(app)
+      .post("/api/companies/1/cleanup")
+      .send({ confirmCompanyName: "Acme Precision" });
+    expect(cleanupResponse.status).toBe(200);
+    expect(cleanupResponse.body).toMatchObject({
+      companyId: 1,
+      dryRun: false,
+      companyArchived: true,
+      usersDeactivated: 2,
+      invitationsExpired: 1,
+      preserved: {
+        assessments: 3,
+        scores: 3,
+        evidenceNotes: 1,
+        actions: 1,
+      },
+    });
+    expect(mock.state.rows.companies.find((company) => company.id === 1)?.isActive).toBe(false);
+    expect(mock.state.rows.users.filter((user) => user.companyId === 1 && user.isActive)).toHaveLength(0);
+    expect(mock.state.rows.users.find((user) => user.role === "super_admin")?.isActive).toBe(true);
+    expect(mock.state.rows.invitations.find((invitation) => invitation.id === 1)?.status).toBe("expired");
+    expect(mock.state.rows.assessmentCycles.filter((assessment) => assessment.companyId === 1)).toHaveLength(3);
+    expect(mock.state.rows.scores.filter((score) => score.assessmentId === 103)).toHaveLength(3);
+    expect(mock.state.rows.actions.filter((action) => action.companyId === 1)).toHaveLength(1);
+    expect(mock.state.rows.auditLogs.some((log) => log.eventType === "company.cleanup_archived" && log.companyId === 1)).toBe(true);
+
+    signInAs("clerk-admin-a");
+    const inactiveUserResponse = await request(app).get("/api/companies/1/dashboard");
+    expect(inactiveUserResponse.status).toBe(403);
+    expect(inactiveUserResponse.body.error).toContain("inactive");
+  });
+
   it("allows Super Admins to invite global Super Admin users only as unscoped users", async () => {
     signInAs("clerk-super");
     const response = await request(app)
