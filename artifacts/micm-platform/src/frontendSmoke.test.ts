@@ -127,6 +127,18 @@ const companies = [
     contactEmail: "admin@acme.test",
     currentStatusDescription: "Scaling output with pressure on cash and delivery.",
     currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+    stakeholderEngagement: [
+      {
+        stakeholder: "QA board sponsor",
+        engagementTopic: "Pilot readiness",
+        contact: "Operations lead",
+        dateOfContact: "2026-01-02",
+      },
+      { stakeholder: "", engagementTopic: "", contact: "", dateOfContact: "" },
+      { stakeholder: "", engagementTopic: "", contact: "", dateOfContact: "" },
+      { stakeholder: "", engagementTopic: "", contact: "", dateOfContact: "" },
+      { stakeholder: "", engagementTopic: "", contact: "", dateOfContact: "" },
+    ],
     isActive: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -139,6 +151,7 @@ const companies = [
     contactEmail: "admin@beta.test",
     currentStatusDescription: "Stabilising workforce capacity and shop-floor flow.",
     currentChallenges: ["Labour and skills shortages", "Production under-utilisation"],
+    stakeholderEngagement: [],
     isActive: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -146,31 +159,36 @@ const companies = [
 ];
 
 const companyChallenges = vi.hoisted(() => ({
-  Cash_flow_pressure: "Cash flow pressure",
   Labour_and_skills_shortages: "Labour and skills shortages",
-  Recruitment_and_retention: "Recruitment and retention",
-  Rising_material_costs: "Rising material costs",
+  High_employee_turnover: "High employee turnover",
+  High_absenteeism: "High absenteeism",
+  Quality_issues_or_rework: "Quality issues or rework",
   Supply_chain_disruption: "Supply chain disruption",
   Production_capacity_constraints: "Production capacity constraints",
-  Quality_issues_or_rework: "Quality issues or rework",
   Delivery_performance_challenges: "Delivery performance challenges",
+  Long_lead_times: "Long lead times",
+  "Production_under-utilisation": "Production under-utilisation",
+  Cash_flow_pressure: "Cash flow pressure",
+  Low_Profitability: "Low Profitability",
   Equipment_reliability_and_downtime: "Equipment reliability and downtime",
+  No_capital_to_invest: "No capital to invest",
+  Rising_material_costs: "Rising material costs",
+  Ageing_Product_Range: "Ageing Product Range",
   Lack_of_process_standardisation: "Lack of process standardisation",
   Limited_management_information_or_data_visibility: "Limited management information or data visibility",
   Low_digital_maturity: "Low digital maturity",
   Energy_costs_and_sustainability_pressure: "Energy costs and sustainability pressure",
   Leadership_bandwidth_constraints: "Leadership bandwidth constraints",
   Growth_planning_and_market_uncertainty: "Growth planning and market uncertainty",
-  "Production_under-utilisation": "Production under-utilisation",
   Poor_forecast_accuracy: "Poor forecast accuracy",
-  Long_lead_times: "Long lead times",
-  "High_work-in-progress_levels": "High work-in-progress levels",
   Inefficient_factory_layout_or_material_flow: "Inefficient factory layout or material flow",
   Low_sales_pipeline_visibility: "Low sales pipeline visibility",
   Customer_concentration_risk: "Customer concentration risk",
   Difficulty_funding_capital_investment: "Difficulty funding capital investment",
   Weak_supplier_performance_management: "Weak supplier performance management",
   Limited_continuous_improvement_capability: "Limited continuous improvement capability",
+  "High_work-in-progress_levels": "High work-in-progress levels",
+  Recruitment_and_retention: "Recruitment and retention",
 } as const));
 
 const assessments = [
@@ -389,6 +407,7 @@ vi.mock("@workspace/api-client-react", () => {
           activeActions: 1,
           currentStatusDescription: "Scaling output with pressure on cash and delivery.",
           currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+          stakeholderEngagement: companies[0].stakeholderEngagement,
           challengeCount: 2,
           domainScores: [{ domainId: 1, domainName: "Strategy", score: 3, band: "Developing" }],
         },
@@ -399,6 +418,7 @@ vi.mock("@workspace/api-client-react", () => {
           companyName: "Acme Precision",
           currentStatusDescription: "Scaling output with pressure on cash and delivery.",
           currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+          stakeholderEngagement: companies[0].stakeholderEngagement,
           challengeCount: 2,
         },
       ],
@@ -412,6 +432,7 @@ vi.mock("@workspace/api-client-react", () => {
               companyName: "Acme Precision",
               currentStatusDescription: "Scaling output with pressure on cash and delivery.",
               currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+              stakeholderEngagement: companies[0].stakeholderEngagement,
               challengeCount: 2,
             },
           ],
@@ -506,9 +527,12 @@ describe("frontend smoke coverage", () => {
     setRole("company_admin", 2);
     const adminInfo = render(React.createElement(CompanyInfoPage));
     expect(adminInfo).toContain("Current Status Description");
+    expect(adminInfo).toContain("Stakeholder Engagement");
+    expect(adminInfo).toContain("Engagement Topic");
+    expect(adminInfo).toContain("Date of Contact");
     expect(adminInfo).toContain("Current Challenges");
     expect(adminInfo).toContain("Save Info");
-    for (const challenge of Object.values(companyChallenges)) {
+    for (const challenge of Object.values(companyChallenges).filter((challenge) => challenge !== "Recruitment and retention")) {
       expect(adminInfo).toContain(challenge);
     }
     expect(adminInfo).toContain("Production under-utilisation");

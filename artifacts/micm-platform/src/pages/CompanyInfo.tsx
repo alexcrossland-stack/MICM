@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  CompanyChallenge,
+  type CompanyChallenge,
   useGetCompany,
   useListCompanies,
   useUpdateCompany,
@@ -18,13 +18,114 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Building2, CheckCircle2, Info } from "lucide-react";
 
-const CHALLENGE_OPTIONS = Object.values(CompanyChallenge);
-type CompanyChallengeValue = (typeof CHALLENGE_OPTIONS)[number];
+const CHALLENGE_GROUPS = [
+  {
+    group: "People",
+    challenges: [
+      "Labour and skills shortages",
+      "High employee turnover",
+      "High absenteeism",
+    ],
+  },
+  {
+    group: "Quality",
+    challenges: [
+      "Quality issues or rework",
+    ],
+  },
+  {
+    group: "Delivery",
+    challenges: [
+      "Supply chain disruption",
+      "Production capacity constraints",
+      "Delivery performance challenges",
+      "Long lead times",
+      "Production under-utilisation",
+    ],
+  },
+  {
+    group: "Cost",
+    challenges: [
+      "Cash flow pressure",
+      "Low Profitability",
+    ],
+  },
+  {
+    group: "Asset",
+    challenges: [
+      "Equipment reliability and downtime",
+      "No capital to invest",
+    ],
+  },
+  {
+    group: "Product",
+    challenges: [
+      "Rising material costs",
+      "Ageing Product Range",
+    ],
+  },
+  {
+    group: "Other",
+    challenges: [
+      "Lack of process standardisation",
+      "Limited management information or data visibility",
+      "Low digital maturity",
+      "Energy costs and sustainability pressure",
+      "Leadership bandwidth constraints",
+      "Growth planning and market uncertainty",
+      "Poor forecast accuracy",
+      "Inefficient factory layout or material flow",
+      "Low sales pipeline visibility",
+      "Customer concentration risk",
+      "Difficulty funding capital investment",
+      "Weak supplier performance management",
+      "Limited continuous improvement capability",
+      "High work-in-progress levels",
+    ],
+  },
+] as const satisfies ReadonlyArray<{ group: string; challenges: readonly CompanyChallenge[] }>;
+const CHALLENGE_OPTIONS = CHALLENGE_GROUPS.flatMap((group) => group.challenges);
+type CompanyChallengeValue = CompanyChallenge;
+
+type StakeholderEngagementRow = {
+  stakeholder: string;
+  engagementTopic: string;
+  contact: string;
+  dateOfContact: string;
+};
+
+const EMPTY_STAKEHOLDER_ROW: StakeholderEngagementRow = {
+  stakeholder: "",
+  engagementTopic: "",
+  contact: "",
+  dateOfContact: "",
+};
+
+function defaultStakeholderRows(rows?: StakeholderEngagementRow[] | null): StakeholderEngagementRow[] {
+  const normalized = (rows ?? []).slice(0, 5).map((row) => ({
+    stakeholder: row.stakeholder ?? "",
+    engagementTopic: row.engagementTopic ?? "",
+    contact: row.contact ?? "",
+    dateOfContact: row.dateOfContact ?? "",
+  }));
+  while (normalized.length < 5) normalized.push({ ...EMPTY_STAKEHOLDER_ROW });
+  return normalized;
+}
 
 function sameChallenges(a: string[], b: string[]) {
   if (a.length !== b.length) return false;
   const bSet = new Set(b);
   return a.every((value) => bSet.has(value));
+}
+
+function sameStakeholderRows(a: StakeholderEngagementRow[], b: StakeholderEngagementRow[]) {
+  return defaultStakeholderRows(a).every((row, index) => {
+    const other = defaultStakeholderRows(b)[index];
+    return row.stakeholder === other.stakeholder
+      && row.engagementTopic === other.engagementTopic
+      && row.contact === other.contact
+      && row.dateOfContact === other.dateOfContact;
+  });
 }
 
 export default function CompanyInfoPage() {
@@ -34,6 +135,7 @@ export default function CompanyInfoPage() {
   const qc = useQueryClient();
   const [statusDescription, setStatusDescription] = useState("");
   const [selectedChallenges, setSelectedChallenges] = useState<CompanyChallengeValue[]>([]);
+  const [stakeholderRows, setStakeholderRows] = useState<StakeholderEngagementRow[]>(() => defaultStakeholderRows());
   const [saveState, setSaveState] = useState<string | null>(null);
 
   const canEdit = isSuperAdmin || isCompanyAdmin;
@@ -52,21 +154,34 @@ export default function CompanyInfoPage() {
     if (!company) return;
     setStatusDescription(company.currentStatusDescription ?? "");
     setSelectedChallenges(company.currentChallenges ?? []);
+    setStakeholderRows(defaultStakeholderRows(company.stakeholderEngagement));
     setSaveState(null);
   }, [company]);
 
   const challengeCount = selectedChallenges.length;
   const persistedChallenges = company?.currentChallenges ?? [];
+  const persistedStakeholderRows = defaultStakeholderRows(company?.stakeholderEngagement);
+  const activeChallengeSet = useMemo(() => new Set<string>(CHALLENGE_OPTIONS), []);
+  const legacySelectedChallenges = selectedChallenges.filter((challenge) => !activeChallengeSet.has(challenge));
   const isDirty = useMemo(() => {
     if (!company) return false;
     return (company.currentStatusDescription ?? "") !== statusDescription
-      || !sameChallenges(persistedChallenges, selectedChallenges);
-  }, [company, persistedChallenges, selectedChallenges, statusDescription]);
+      || !sameChallenges(persistedChallenges, selectedChallenges)
+      || !sameStakeholderRows(persistedStakeholderRows, stakeholderRows);
+  }, [company, persistedChallenges, persistedStakeholderRows, selectedChallenges, stakeholderRows, statusDescription]);
 
   function toggleChallenge(challenge: CompanyChallengeValue, checked: boolean) {
     setSelectedChallenges((current) => {
       if (checked) return Array.from(new Set([...current, challenge]));
       return current.filter((item) => item !== challenge);
+    });
+  }
+
+  function updateStakeholderRow(index: number, field: keyof StakeholderEngagementRow, value: string) {
+    setStakeholderRows((current) => {
+      const next = defaultStakeholderRows(current);
+      next[index] = { ...next[index], [field]: value };
+      return next;
     });
   }
 
@@ -79,6 +194,7 @@ export default function CompanyInfoPage() {
         data: {
           currentStatusDescription: statusDescription.trim() || null,
           currentChallenges: selectedChallenges,
+          stakeholderEngagement: stakeholderRows,
         },
       });
       await qc.invalidateQueries();
@@ -180,29 +296,81 @@ export default function CompanyInfoPage() {
             </div>
 
             <div className="space-y-3">
+              <div>
+                <Label>Stakeholder Engagement</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Record up to five recent stakeholder contacts that help explain the current company context.
+                </p>
+              </div>
+              <div className="overflow-x-auto rounded-md border border-border">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead className="bg-muted/50">
+                    <tr className="border-b border-border">
+                      <th className="text-left font-medium text-muted-foreground px-3 py-2">Stakeholder</th>
+                      <th className="text-left font-medium text-muted-foreground px-3 py-2">Engagement Topic</th>
+                      <th className="text-left font-medium text-muted-foreground px-3 py-2">Contact</th>
+                      <th className="text-left font-medium text-muted-foreground px-3 py-2">Date of Contact</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stakeholderRows.map((row, index) => (
+                      <tr key={index} className="border-b border-border/60 last:border-0">
+                        {(["stakeholder", "engagementTopic", "contact", "dateOfContact"] as const).map((field) => (
+                          <td key={field} className="p-2 align-top">
+                            <input
+                              value={row[field]}
+                              onChange={(event) => updateStakeholderRow(index, field, event.target.value)}
+                              readOnly={!canEdit}
+                              className="h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring read-only:bg-muted/40"
+                              aria-label={`${field} row ${index + 1}`}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <Label>Current Challenges</Label>
                 <Badge variant="outline">{challengeCount} selected</Badge>
               </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {CHALLENGE_OPTIONS.map((challenge) => {
-                  const checked = selectedChallenges.includes(challenge);
-                  return (
-                    <label
-                      key={challenge}
-                      className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 text-sm"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        disabled={!canEdit}
-                        onCheckedChange={(value) => toggleChallenge(challenge, value === true)}
-                        aria-label={challenge}
-                      />
-                      <span className="leading-snug">{challenge}</span>
-                    </label>
-                  );
-                })}
+              <div className="grid lg:grid-cols-2 gap-4">
+                {CHALLENGE_GROUPS.map((group) => (
+                  <div key={group.group} className="rounded-md border border-border bg-muted/20 p-3">
+                    <p className="text-sm font-medium mb-3">{group.group}</p>
+                    <div className="space-y-2">
+                      {group.challenges.map((challenge) => {
+                        const checked = selectedChallenges.includes(challenge);
+                        return (
+                          <label key={challenge} className="flex items-start gap-3 text-sm">
+                            <Checkbox
+                              checked={checked}
+                              disabled={!canEdit}
+                              onCheckedChange={(value) => toggleChallenge(challenge, value === true)}
+                              aria-label={challenge}
+                            />
+                            <span className="leading-snug">{challenge}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
+              {legacySelectedChallenges.length > 0 && (
+                <div className="rounded-md border border-dashed border-border p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Previously saved challenges</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {legacySelectedChallenges.map((challenge) => (
+                      <Badge key={challenge} variant="outline">{challenge}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               {!canEdit && selectedChallenges.length === 0 && (
                 <p className="text-sm text-muted-foreground">No current challenges have been recorded yet.</p>
               )}

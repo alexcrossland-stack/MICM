@@ -22,7 +22,7 @@ import {
 } from "../lib/reportComposition";
 import { formatCriterionNote } from "../lib/criterionNotes";
 import { recordAuditEvent } from "../lib/audit";
-import { COMPANY_CHALLENGE_OPTIONS, normalizeCompanyChallenges } from "../lib/companyInfo";
+import { COMPANY_CHALLENGE_OPTIONS, normalizeCompanyChallenges, normalizeStakeholderEngagement } from "../lib/companyInfo";
 
 const router: IRouter = Router();
 
@@ -31,6 +31,7 @@ function formatCompany(c: any) {
     id: c.id, name: c.name, sector: c.sector, size: c.size, contactEmail: c.contactEmail,
     currentStatusDescription: c.currentStatusDescription ?? null,
     currentChallenges: normalizeCompanyChallenges(c.currentChallenges),
+    stakeholderEngagement: normalizeStakeholderEngagement(c.stakeholderEngagement),
     isActive: c.isActive,
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
@@ -319,6 +320,7 @@ router.get("/reports/superadmin", requireAuth, async (req: any, res): Promise<vo
       activeActions: activeActionsResult[0].count,
       currentStatusDescription: company.currentStatusDescription ?? null,
       currentChallenges: normalizeCompanyChallenges(company.currentChallenges),
+      stakeholderEngagement: normalizeStakeholderEngagement(company.stakeholderEngagement),
       challengeCount: normalizeCompanyChallenges(company.currentChallenges).length,
       domainScores,
     };
@@ -328,6 +330,7 @@ router.get("/reports/superadmin", requireAuth, async (req: any, res): Promise<vo
     companyName: summary.companyName,
     currentStatusDescription: summary.currentStatusDescription,
     currentChallenges: summary.currentChallenges,
+    stakeholderEngagement: summary.stakeholderEngagement,
     challengeCount: summary.challengeCount,
   }));
   const mostCommonChallenges = COMPANY_CHALLENGE_OPTIONS

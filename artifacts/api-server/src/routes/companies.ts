@@ -18,7 +18,9 @@ import { recordAuditEvent } from "../lib/audit";
 import {
   companyChallengeDiff,
   normalizeCompanyChallenges,
+  normalizeStakeholderEngagement,
   sameCompanyChallenges,
+  sameStakeholderEngagement,
 } from "../lib/companyInfo";
 
 const router: IRouter = Router();
@@ -32,6 +34,7 @@ function formatCompany(c: any) {
     contactEmail: c.contactEmail,
     currentStatusDescription: c.currentStatusDescription ?? null,
     currentChallenges: normalizeCompanyChallenges(c.currentChallenges),
+    stakeholderEngagement: normalizeStakeholderEngagement(c.stakeholderEngagement),
     isActive: c.isActive,
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
@@ -70,6 +73,7 @@ router.post("/companies", requireAuth, async (req: any, res): Promise<void> => {
     name: parsed.data.name.trim(),
     currentStatusDescription: parsed.data.currentStatusDescription?.trim() || null,
     currentChallenges: normalizeCompanyChallenges(parsed.data.currentChallenges),
+    stakeholderEngagement: normalizeStakeholderEngagement(parsed.data.stakeholderEngagement),
   };
   const [company] = await db.insert(companiesTable).values(companyInput).returning();
   await recordAuditEvent(req, {
@@ -155,22 +159,30 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
   if (parsed.data.currentChallenges !== undefined) {
     updates.currentChallenges = normalizeCompanyChallenges(parsed.data.currentChallenges);
   }
+  if (parsed.data.stakeholderEngagement !== undefined) {
+    updates.stakeholderEngagement = normalizeStakeholderEngagement(parsed.data.stakeholderEngagement);
+  }
   if (parsed.data.isActive != null && currentUser.role === "super_admin") updates.isActive = parsed.data.isActive;
 
   const [existingCompany] = await db.select().from(companiesTable).where(eq(companiesTable.id, params.data.id));
   if (!existingCompany) { res.status(404).json({ error: "Company not found" }); return; }
   const previousStatusDescription = existingCompany.currentStatusDescription ?? null;
   const previousChallenges = normalizeCompanyChallenges(existingCompany.currentChallenges);
+  const previousStakeholderEngagement = normalizeStakeholderEngagement(existingCompany.stakeholderEngagement);
 
   const [company] = await db.update(companiesTable).set(updates).where(eq(companiesTable.id, params.data.id)).returning();
   if (!company) { res.status(404).json({ error: "Company not found" }); return; }
   const currentChallenges = normalizeCompanyChallenges(company.currentChallenges);
+  const currentStakeholderEngagement = normalizeStakeholderEngagement(company.stakeholderEngagement);
   const statusDescriptionChanged =
     Object.prototype.hasOwnProperty.call(updates, "currentStatusDescription")
     && previousStatusDescription !== (company.currentStatusDescription ?? null);
   const challengesChanged =
     Object.prototype.hasOwnProperty.call(updates, "currentChallenges")
     && !sameCompanyChallenges(previousChallenges, currentChallenges);
+  const stakeholderEngagementChanged =
+    Object.prototype.hasOwnProperty.call(updates, "stakeholderEngagement")
+    && !sameStakeholderEngagement(previousStakeholderEngagement, currentStakeholderEngagement);
   await recordAuditEvent(req, {
     currentUser,
     eventType: "company.updated",
@@ -206,6 +218,19 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
         previousChallengeCount: previousChallenges.length,
         newChallengeCount: currentChallenges.length,
         ...companyChallengeDiff(previousChallenges, currentChallenges),
+      },
+    });
+  }
+  if (stakeholderEngagementChanged) {
+    await recordAuditEvent(req, {
+      currentUser,
+      eventType: "company_info.stakeholder_engagement_updated",
+      companyId: company.id,
+      targetType: "company",
+      targetId: company.id,
+      metadata: {
+        previousCompletedRows: previousStakeholderEngagement.filter((row) => Object.values(row).some(Boolean)).length,
+        newCompletedRows: currentStakeholderEngagement.filter((row) => Object.values(row).some(Boolean)).length,
       },
     });
   }

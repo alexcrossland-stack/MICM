@@ -32,6 +32,7 @@ const mock = vi.hoisted(() => {
       "contactEmail",
       "currentStatusDescription",
       "currentChallenges",
+      "stakeholderEngagement",
       "isActive",
       "createdAt",
       "updatedAt",
@@ -170,6 +171,14 @@ const mock = vi.hoisted(() => {
           contactEmail: "admin@acme.test",
           currentStatusDescription: "Scaling output with pressure on cash and delivery.",
           currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+          stakeholderEngagement: [
+            {
+              stakeholder: "QA board sponsor",
+              engagementTopic: "Pilot readiness",
+              contact: "Operations lead",
+              dateOfContact: "2026-01-02",
+            },
+          ],
           isActive: true,
         }),
         dated({
@@ -180,6 +189,7 @@ const mock = vi.hoisted(() => {
           contactEmail: "admin@beta.test",
           currentStatusDescription: "Stabilising workforce capacity and shop-floor flow.",
           currentChallenges: ["Labour and skills shortages", "Production under-utilisation"],
+          stakeholderEngagement: [],
           isActive: true,
         }),
       ],
@@ -731,7 +741,7 @@ describe("company info", () => {
     signInAs("clerk-admin-a");
     const response = await request(app)
       .patch("/api/companies/1")
-      .send({ currentChallenges: ["Production under-utilisation", "Not a controlled challenge"] });
+      .send({ currentChallenges: ["High employee turnover", "Not a controlled challenge"] });
 
     expect(response.status).toBe(400);
   });
@@ -742,17 +752,33 @@ describe("company info", () => {
     const readResponse = await request(app).get("/api/companies/2");
     expect(readResponse.status).toBe(200);
     expect(readResponse.body.currentChallenges).toContain("Production under-utilisation");
+    expect(readResponse.body.stakeholderEngagement).toHaveLength(5);
 
     const updateResponse = await request(app)
       .patch("/api/companies/2")
       .send({
         currentStatusDescription: "Super Admin updated current status.",
-        currentChallenges: ["Long lead times", "Production under-utilisation"],
+        currentChallenges: ["Long lead times", "Low Profitability"],
+        stakeholderEngagement: [
+          {
+            stakeholder: "Operations sponsor",
+            engagementTopic: "Throughput review",
+            contact: "ops@example.test",
+            dateOfContact: "2026-01-08",
+          },
+        ],
       });
 
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.currentStatusDescription).toBe("Super Admin updated current status.");
-    expect(updateResponse.body.currentChallenges).toEqual(["Long lead times", "Production under-utilisation"]);
+    expect(updateResponse.body.currentChallenges).toEqual(["Long lead times", "Low Profitability"]);
+    expect(updateResponse.body.stakeholderEngagement).toHaveLength(5);
+    expect(updateResponse.body.stakeholderEngagement[0]).toEqual({
+      stakeholder: "Operations sponsor",
+      engagementTopic: "Throughput review",
+      contact: "ops@example.test",
+      dateOfContact: "2026-01-08",
+    });
   });
 
   it("keeps company deactivation as a Super Admin-only soft-delete operation", async () => {
@@ -774,11 +800,20 @@ describe("company info", () => {
       .patch("/api/companies/1")
       .send({
         currentStatusDescription: "Company Admin updated current status.",
-        currentChallenges: ["Cash flow pressure", "Long lead times"],
+        currentChallenges: ["Cash flow pressure", "High absenteeism"],
+        stakeholderEngagement: [
+          {
+            stakeholder: "Finance lead",
+            engagementTopic: "Cash position",
+            contact: "finance@example.test",
+            dateOfContact: "2026-01-09",
+          },
+        ],
       });
     expect(updateResponse.status).toBe(200);
     expect(updateResponse.body.currentStatusDescription).toBe("Company Admin updated current status.");
-    expect(updateResponse.body.currentChallenges).toEqual(["Cash flow pressure", "Long lead times"]);
+    expect(updateResponse.body.currentChallenges).toEqual(["Cash flow pressure", "High absenteeism"]);
+    expect(updateResponse.body.stakeholderEngagement[0].stakeholder).toBe("Finance lead");
 
     expect(
       (await request(app).patch("/api/companies/2").send({ currentChallenges: ["Long lead times"] })).status,
@@ -792,6 +827,7 @@ describe("company info", () => {
         "company.updated",
         "company_info.status_description_updated",
         "company_info.challenges_updated",
+        "company_info.stakeholder_engagement_updated",
       ]),
     );
     expect(JSON.stringify(auditResponse.body)).not.toContain("Company Admin updated current status.");
@@ -804,6 +840,7 @@ describe("company info", () => {
     expect(readResponse.status).toBe(200);
     expect(readResponse.body.currentStatusDescription).toContain("Scaling output");
     expect(readResponse.body.currentChallenges).toContain("Cash flow pressure");
+    expect(readResponse.body.stakeholderEngagement[0].stakeholder).toBe("QA board sponsor");
 
     const updateResponse = await request(app)
       .patch("/api/companies/1")
@@ -1053,6 +1090,8 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(exportResponse.text).toContain("template,section,company_id,company_name,item_id,item_name,item_date");
     expect(exportResponse.text).toContain("board_ready,company_info,1,Acme Precision,,Current Status Description");
     expect(exportResponse.text).toContain("Production under-utilisation");
+    expect(exportResponse.text).toContain("Stakeholder: QA board sponsor");
+    expect(exportResponse.text).toContain("Pilot readiness");
     expect(exportResponse.text).toContain("board_ready,domain_findings,1,Acme Precision");
     expect(exportResponse.text).toContain("1,Strategy,3,Developing,3.5");
 
@@ -1073,6 +1112,8 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(workbookText).toContain("Summary");
     expect(workbookText).toContain("Company Info");
     expect(workbookText).toContain("Production under-utilisation");
+    expect(workbookText).toContain("Stakeholder");
+    expect(workbookText).toContain("QA board sponsor");
     expect(workbookText).toContain("Domain Scores");
     expect(workbookText).toContain("Actions");
     expect(workbookText).toContain("Strategy");
@@ -1118,12 +1159,16 @@ describe("dashboard, report, and analytics smoke coverage", () => {
         companyName: "Acme Precision",
         currentStatusDescription: "Scaling output with pressure on cash and delivery.",
         currentChallenges: ["Cash flow pressure", "Production under-utilisation"],
+        stakeholderEngagement: expect.arrayContaining([
+          expect.objectContaining({ stakeholder: "QA board sponsor" }),
+        ]),
         challengeCount: 2,
       }),
       expect.objectContaining({
         companyId: 2,
         companyName: "Beta Fabrication",
         currentChallenges: ["Labour and skills shortages", "Production under-utilisation"],
+        stakeholderEngagement: expect.any(Array),
         challengeCount: 2,
       }),
     ]);
@@ -1181,6 +1226,7 @@ describe("dashboard, report, and analytics smoke coverage", () => {
     expect(composition.maturityOverview.overallScore).toBe(3.5);
     expect(composition.companyInfo.currentStatusDescription).toBe("Scaling output with pressure on cash and delivery.");
     expect(composition.companyInfo.currentChallenges).toContain("Production under-utilisation");
+    expect(composition.companyInfo.stakeholderEngagement[0].stakeholder).toBe("QA board sponsor");
     expect(composition.domainFindings.map((finding) => finding.domainName)).toEqual(["Strategy", "Operations"]);
     expect(composition.actionRoadmap.byStatus.not_started).toBe(1);
     expect(composition.coverSummary.evidenceNotes).toBe(1);

@@ -24,6 +24,12 @@ export type ReportComposition = {
   companyInfo: {
     currentStatusDescription: string | null;
     currentChallenges: string[];
+    stakeholderEngagement: Array<{
+      stakeholder: string;
+      engagementTopic: string;
+      contact: string;
+      dateOfContact: string;
+    }>;
     challengeCount: number;
   };
   executiveSummary: {
@@ -126,6 +132,7 @@ export function composeCompanyReport(
     companyInfo: {
       currentStatusDescription: report.company.currentStatusDescription ?? null,
       currentChallenges,
+      stakeholderEngagement: report.company.stakeholderEngagement ?? [],
       challengeCount: currentChallenges.length,
     },
     executiveSummary: {

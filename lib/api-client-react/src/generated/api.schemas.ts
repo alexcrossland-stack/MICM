@@ -58,15 +58,21 @@ export type CompanyChallenge =
   (typeof CompanyChallenge)[keyof typeof CompanyChallenge];
 
 export const CompanyChallenge = {
-  Cash_flow_pressure: "Cash flow pressure",
   Labour_and_skills_shortages: "Labour and skills shortages",
-  Recruitment_and_retention: "Recruitment and retention",
-  Rising_material_costs: "Rising material costs",
+  High_employee_turnover: "High employee turnover",
+  High_absenteeism: "High absenteeism",
+  Quality_issues_or_rework: "Quality issues or rework",
   Supply_chain_disruption: "Supply chain disruption",
   Production_capacity_constraints: "Production capacity constraints",
-  Quality_issues_or_rework: "Quality issues or rework",
   Delivery_performance_challenges: "Delivery performance challenges",
+  Long_lead_times: "Long lead times",
+  "Production_under-utilisation": "Production under-utilisation",
+  Cash_flow_pressure: "Cash flow pressure",
+  Low_Profitability: "Low Profitability",
   Equipment_reliability_and_downtime: "Equipment reliability and downtime",
+  No_capital_to_invest: "No capital to invest",
+  Rising_material_costs: "Rising material costs",
+  Ageing_Product_Range: "Ageing Product Range",
   Lack_of_process_standardisation: "Lack of process standardisation",
   Limited_management_information_or_data_visibility:
     "Limited management information or data visibility",
@@ -76,10 +82,7 @@ export const CompanyChallenge = {
   Leadership_bandwidth_constraints: "Leadership bandwidth constraints",
   Growth_planning_and_market_uncertainty:
     "Growth planning and market uncertainty",
-  "Production_under-utilisation": "Production under-utilisation",
   Poor_forecast_accuracy: "Poor forecast accuracy",
-  Long_lead_times: "Long lead times",
-  "High_work-in-progress_levels": "High work-in-progress levels",
   Inefficient_factory_layout_or_material_flow:
     "Inefficient factory layout or material flow",
   Low_sales_pipeline_visibility: "Low sales pipeline visibility",
@@ -89,7 +92,16 @@ export const CompanyChallenge = {
   Weak_supplier_performance_management: "Weak supplier performance management",
   Limited_continuous_improvement_capability:
     "Limited continuous improvement capability",
+  "High_work-in-progress_levels": "High work-in-progress levels",
+  Recruitment_and_retention: "Recruitment and retention",
 } as const;
+
+export interface StakeholderEngagementRow {
+  stakeholder: string;
+  engagementTopic: string;
+  contact: string;
+  dateOfContact: string;
+}
 
 export interface Company {
   id: number;
@@ -103,6 +115,7 @@ export interface Company {
   /** @nullable */
   currentStatusDescription?: string | null;
   currentChallenges: CompanyChallenge[];
+  stakeholderEngagement: StakeholderEngagementRow[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -119,6 +132,7 @@ export interface CreateCompanyBody {
   /** @nullable */
   currentStatusDescription?: string | null;
   currentChallenges?: CompanyChallenge[];
+  stakeholderEngagement?: StakeholderEngagementRow[];
 }
 
 export interface UpdateCompanyBody {
@@ -133,6 +147,7 @@ export interface UpdateCompanyBody {
   /** @nullable */
   currentStatusDescription?: string | null;
   currentChallenges?: CompanyChallenge[];
+  stakeholderEngagement?: StakeholderEngagementRow[];
   /** @nullable */
   isActive?: boolean | null;
 }
@@ -596,6 +611,7 @@ export interface CompanyReportSummary {
   /** @nullable */
   currentStatusDescription?: string | null;
   currentChallenges: CompanyChallenge[];
+  stakeholderEngagement: StakeholderEngagementRow[];
   challengeCount: number;
   domainScores: DomainScore[];
 }
@@ -606,6 +622,7 @@ export interface CompanyInfoSummary {
   /** @nullable */
   currentStatusDescription?: string | null;
   currentChallenges: CompanyChallenge[];
+  stakeholderEngagement: StakeholderEngagementRow[];
   challengeCount: number;
 }
 

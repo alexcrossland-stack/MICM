@@ -207,6 +207,11 @@ export default function ReportsPage() {
                     {companyInfo.currentStatusDescription || "No current status description recorded."}
                   </p>
                   <p className="text-xs mt-2">{companyInfo.challengeCount} current challenge{companyInfo.challengeCount === 1 ? "" : "s"}</p>
+                  {(companyInfo.stakeholderEngagement ?? []).some((row) => Object.values(row).some(Boolean)) && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {(companyInfo.stakeholderEngagement ?? []).filter((row) => Object.values(row).some(Boolean)).length} stakeholder engagement row{(companyInfo.stakeholderEngagement ?? []).filter((row) => Object.values(row).some(Boolean)).length === 1 ? "" : "s"}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -412,6 +417,37 @@ export default function ReportsPage() {
                     {report.company.currentChallenges.map((challenge) => (
                       <span key={challenge} className="rounded-full bg-muted px-2.5 py-1 text-xs">{challenge}</span>
                     ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Stakeholder Engagement</p>
+                {(report.company.stakeholderEngagement ?? []).filter((row) => Object.values(row).some(Boolean)).length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-1">No stakeholder engagement recorded.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border border-border mt-2">
+                    <table className="w-full min-w-[640px] text-xs">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left font-medium px-3 py-2">Stakeholder</th>
+                          <th className="text-left font-medium px-3 py-2">Engagement Topic</th>
+                          <th className="text-left font-medium px-3 py-2">Contact</th>
+                          <th className="text-left font-medium px-3 py-2">Date of Contact</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(report.company.stakeholderEngagement ?? [])
+                          .filter((row) => Object.values(row).some(Boolean))
+                          .map((row, index) => (
+                            <tr key={index} className="border-t border-border">
+                              <td className="px-3 py-2">{row.stakeholder}</td>
+                              <td className="px-3 py-2">{row.engagementTopic}</td>
+                              <td className="px-3 py-2">{row.contact}</td>
+                              <td className="px-3 py-2">{row.dateOfContact}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>

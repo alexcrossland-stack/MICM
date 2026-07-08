@@ -84,6 +84,22 @@ function buildCompanyReportCsv(composition: ReportComposition) {
       "",
     ]);
   }
+  for (const stakeholder of composition.companyInfo.stakeholderEngagement.filter((row) => Object.values(row).some(Boolean))) {
+    rows.push([
+      composition.template,
+      "company_info",
+      String(composition.coverSummary.companyId),
+      composition.coverSummary.companyName,
+      "",
+      `Stakeholder: ${stakeholder.stakeholder}`,
+      stakeholder.dateOfContact,
+      "",
+      "",
+      "",
+      [stakeholder.engagementTopic, stakeholder.contact].filter(Boolean).join(" | "),
+      "",
+    ]);
+  }
 
   for (const domainScore of composition.maturityOverview.domainScores) {
     rows.push([
@@ -161,6 +177,7 @@ function buildCompanyReportWorkbook(composition: ReportComposition) {
         ["Current status", composition.companyInfo.currentStatusDescription ?? ""],
         ["Challenge count", composition.companyInfo.challengeCount],
         ["Challenges", composition.companyInfo.currentChallenges.join("; ")],
+        ["Stakeholder engagement", formatStakeholderEngagement(composition.companyInfo.stakeholderEngagement)],
         ["Executive summary", composition.executiveSummary.headline],
       ],
     },
@@ -171,6 +188,10 @@ function buildCompanyReportWorkbook(composition: ReportComposition) {
         ["Current Status Description", composition.companyInfo.currentStatusDescription ?? ""],
         ["Challenge count", composition.companyInfo.challengeCount],
         ...composition.companyInfo.currentChallenges.map((challenge) => ["Challenge", challenge]),
+        ["Stakeholder", "Engagement Topic", "Contact", "Date of Contact"],
+        ...composition.companyInfo.stakeholderEngagement
+          .filter((row) => Object.values(row).some(Boolean))
+          .map((row) => [row.stakeholder, row.engagementTopic, row.contact, row.dateOfContact]),
       ],
     },
     {
@@ -366,6 +387,20 @@ function buildPdfExecutiveSummaryPage(composition: ReportComposition): PdfComman
   y -= 34;
   for (const bullet of composition.executiveSummary.bullets) {
     y = bulletText(commands, bullet, PDF_MARGIN_X, y);
+  }
+  const stakeholderRows = composition.companyInfo.stakeholderEngagement.filter((row) => Object.values(row).some(Boolean));
+  if (stakeholderRows.length > 0) {
+    y -= 14;
+    commands.push(text("Stakeholder engagement", PDF_MARGIN_X, y, 12, "bold", PDF_TEXT));
+    y -= 24;
+    for (const row of stakeholderRows.slice(0, 5)) {
+      y = bulletText(
+        commands,
+        `${row.stakeholder || "Stakeholder"}: ${[row.engagementTopic, row.contact, row.dateOfContact].filter(Boolean).join(" | ")}`,
+        PDF_MARGIN_X,
+        y,
+      );
+    }
   }
   return commands;
 }
@@ -631,4 +666,11 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug || "company";
+}
+
+function formatStakeholderEngagement(rows: ReportComposition["companyInfo"]["stakeholderEngagement"]) {
+  return rows
+    .filter((row) => Object.values(row).some(Boolean))
+    .map((row) => [row.stakeholder, row.engagementTopic, row.contact, row.dateOfContact].filter(Boolean).join(" | "))
+    .join("; ");
 }
