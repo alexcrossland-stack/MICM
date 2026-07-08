@@ -53,6 +53,10 @@ router.get("/users/me/role", requireAuth, async (req: any, res): Promise<void> =
     res.status(404).json({ error: "User not found. Please complete onboarding." });
     return;
   }
+  if (!user.isActive) {
+    res.status(403).json({ error: "User account is inactive" });
+    return;
+  }
 
   let companyName: string | null = null;
   if (user.companyId) {

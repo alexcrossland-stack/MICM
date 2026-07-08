@@ -67,9 +67,10 @@ export default function ReportsPage() {
   // ─── Cross-company comparison state (Super Admin only) ────────────────────────
   const [selectedCrossCompanyIds, setSelectedCrossCompanyIds] = useState<number[]>([]);
 
-  const { data: companies } = useListCompanies({
-    query: { enabled: isSuperAdmin } as any,
-  });
+  const { data: companies } = useListCompanies(
+    { isActive: true },
+    { query: { enabled: isSuperAdmin } as any },
+  );
 
   const { data: superAdminReport } = useGetSuperAdminReport({
     query: { enabled: isSuperAdmin } as any,

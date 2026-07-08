@@ -67,7 +67,7 @@ export default function ActionsPage() {
       : {},
     { query: { enabled: !!targetCompanyId } as any }
   );
-  const { data: companies } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
+  const { data: companies } = useListCompanies({ isActive: true }, { query: { enabled: isSuperAdmin } as any });
   const { data: domains } = useListDomains();
   const { data: users } = useListUsers(
     targetCompanyId ? { companyId: targetCompanyId, isActive: true } : {},

@@ -542,10 +542,18 @@ describe("tenant isolation and role permissions", () => {
   });
 
   it("allows only Super Admins to list all companies", async () => {
+    const archivedCompany = mock.state.rows.companies.find((company) => company.id === 2);
+    expect(archivedCompany).toBeTruthy();
+    archivedCompany!.isActive = false;
+
     signInAs("clerk-super");
     const superAdminResponse = await request(app).get("/api/companies");
     expect(superAdminResponse.status).toBe(200);
-    expect(superAdminResponse.body.map((company: any) => company.id)).toEqual([1, 2]);
+    expect(superAdminResponse.body.map((company: any) => company.id)).toEqual([1]);
+
+    const archivedResponse = await request(app).get("/api/companies?isActive=false");
+    expect(archivedResponse.status).toBe(200);
+    expect(archivedResponse.body.map((company: any) => company.id)).toEqual([2]);
 
     signInAs("clerk-admin-a");
     expect((await request(app).get("/api/companies")).status).toBe(403);
@@ -784,8 +792,8 @@ describe("company info", () => {
   it("keeps company deactivation as a Super Admin-only soft-delete operation", async () => {
     signInAs("clerk-admin-a");
     const companyAdminResponse = await request(app).patch("/api/companies/1").send({ isActive: false });
-    expect(companyAdminResponse.status).toBe(200);
-    expect(companyAdminResponse.body.isActive).toBe(true);
+    expect(companyAdminResponse.status).toBe(403);
+    expect(companyAdminResponse.body.error).toContain("Only Super Admins");
 
     signInAs("clerk-super");
     const superAdminResponse = await request(app).patch("/api/companies/1").send({ isActive: false });

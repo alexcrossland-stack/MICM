@@ -52,6 +52,11 @@ paths:
       operationId: listCompanies
       tags: [companies]
       summary: List all companies (Super Admin only)
+      parameters:
+        - name: isActive
+          in: query
+          schema:
+            type: ["boolean", "null"]
       responses:
         "200":
           description: List of companies

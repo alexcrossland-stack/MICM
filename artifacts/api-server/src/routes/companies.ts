@@ -4,6 +4,7 @@ import { companiesTable, usersTable, assessmentCyclesTable, actionsTable, scores
 import { eq, and, count, sql, inArray } from "drizzle-orm";
 import {
   ListCompaniesResponse,
+  ListCompaniesQueryParams,
   GetCompanyResponse,
   CreateCompanyBody,
   UpdateCompanyBody,
@@ -41,14 +42,36 @@ function formatCompany(c: any) {
   };
 }
 
+function parseOptionalBooleanQuery(value: unknown): { success: true; value?: boolean } | { success: false } {
+  if (value === undefined) return { success: true };
+  if (typeof value === "boolean") return { success: true, value };
+  if (typeof value !== "string") return { success: false };
+  if (value === "true") return { success: true, value: true };
+  if (value === "false") return { success: true, value: false };
+  return { success: false };
+}
+
 // GET /companies - Super Admin only
 router.get("/companies", requireAuth, async (req: any, res): Promise<void> => {
+  const isActiveQuery = parseOptionalBooleanQuery(req.query.isActive);
+  if (!isActiveQuery.success) {
+    res.status(400).json({ error: "isActive must be true or false" });
+    return;
+  }
+  const queryParams = ListCompaniesQueryParams.safeParse({ ...req.query, isActive: isActiveQuery.value });
+  if (!queryParams.success) { res.status(400).json({ error: queryParams.error.message }); return; }
+
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
   if (!currentUser || currentUser.role !== "super_admin") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const companies = await db.select().from(companiesTable).orderBy(companiesTable.name);
+  const isActiveFilter = queryParams.data.isActive ?? true;
+  const companies = await db
+    .select()
+    .from(companiesTable)
+    .where(eq(companiesTable.isActive, isActiveFilter))
+    .orderBy(companiesTable.name);
   res.json(ListCompaniesResponse.parse(companies.map(formatCompany)));
 });
 
@@ -162,7 +185,13 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
   if (parsed.data.stakeholderEngagement !== undefined) {
     updates.stakeholderEngagement = normalizeStakeholderEngagement(parsed.data.stakeholderEngagement);
   }
-  if (parsed.data.isActive != null && currentUser.role === "super_admin") updates.isActive = parsed.data.isActive;
+  if (parsed.data.isActive != null) {
+    if (currentUser.role !== "super_admin") {
+      res.status(403).json({ error: "Only Super Admins can archive or reactivate companies" });
+      return;
+    }
+    updates.isActive = parsed.data.isActive;
+  }
 
   const [existingCompany] = await db.select().from(companiesTable).where(eq(companiesTable.id, params.data.id));
   if (!existingCompany) { res.status(404).json({ error: "Company not found" }); return; }
@@ -174,6 +203,9 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
   if (!company) { res.status(404).json({ error: "Company not found" }); return; }
   const currentChallenges = normalizeCompanyChallenges(company.currentChallenges);
   const currentStakeholderEngagement = normalizeStakeholderEngagement(company.stakeholderEngagement);
+  const companyActiveChanged =
+    Object.prototype.hasOwnProperty.call(updates, "isActive")
+    && existingCompany.isActive !== company.isActive;
   const statusDescriptionChanged =
     Object.prototype.hasOwnProperty.call(updates, "currentStatusDescription")
     && previousStatusDescription !== (company.currentStatusDescription ?? null);
@@ -231,6 +263,19 @@ router.patch("/companies/:id", requireAuth, async (req: any, res): Promise<void>
       metadata: {
         previousCompletedRows: previousStakeholderEngagement.filter((row) => Object.values(row).some(Boolean)).length,
         newCompletedRows: currentStakeholderEngagement.filter((row) => Object.values(row).some(Boolean)).length,
+      },
+    });
+  }
+  if (companyActiveChanged) {
+    await recordAuditEvent(req, {
+      currentUser,
+      eventType: company.isActive ? "company.reactivated" : "company.archived",
+      companyId: company.id,
+      targetType: "company",
+      targetId: company.id,
+      metadata: {
+        previousIsActive: existingCompany.isActive,
+        nextIsActive: company.isActive,
       },
     });
   }

@@ -728,6 +728,13 @@ export interface ProgrammeIntelligenceReport {
   domains: string[];
 }
 
+export type ListCompaniesParams = {
+  /**
+   * @nullable
+   */
+  isActive?: boolean | null;
+};
+
 export type ListUsersParams = {
   /**
    * @nullable

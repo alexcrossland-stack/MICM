@@ -23,6 +23,10 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary List all companies (Super Admin only)
  */
+export const ListCompaniesQueryParams = zod.object({
+  isActive: zod.coerce.boolean().nullish(),
+});
+
 export const ListCompaniesResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),

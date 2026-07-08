@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Mail, Copy, Check, UserCheck, Pencil, RotateCcw, ShieldCheck } from "lucide-react";
+import { Plus, Mail, Copy, Check, UserCheck, Pencil, RotateCcw, ShieldCheck, Archive } from "lucide-react";
 import { format } from "date-fns";
 
 const roleConfig: Record<string, string> = {
@@ -33,7 +33,7 @@ export default function UsersPage() {
   const [inviteForm, setInviteForm] = useState({ email: "", role: "company_user", companyId: "" });
   const [editUser, setEditUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ firstName: "", lastName: "", role: "company_user", companyId: "" });
-  const [showInactive, setShowInactive] = useState(true);
+  const [showInactive, setShowInactive] = useState(false);
   const [copied, setCopied] = useState<number | null>(null);
   const canManage = isCompanyAdmin || isSuperAdmin;
 
@@ -54,7 +54,7 @@ export default function UsersPage() {
     isSuperAdmin && !selectedCompanyId ? {} : targetCompanyId ? { companyId: targetCompanyId } : {},
     { query: { enabled: canManage } as any }
   );
-  const { data: companies } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
+  const { data: companies } = useListCompanies({ isActive: true }, { query: { enabled: isSuperAdmin } as any });
   const { mutateAsync: createInvitation, isPending } = useCreateInvitation();
   const isInvitingSuperAdmin = inviteForm.role === "super_admin";
   const isInviteDisabled = !inviteForm.email
@@ -125,12 +125,15 @@ export default function UsersPage() {
 
   async function handleToggleActive(user: any) {
     const nextActive = !user.isActive;
-    const action = nextActive ? "reactivate" : "deactivate";
-    if (!confirm(`Are you sure you want to ${action} ${user.email}?`)) return;
+    const action = nextActive ? "reactivate" : "archive";
+    const message = nextActive
+      ? `Reactivate ${user.email}? They will appear in active user lists again.`
+      : `Archive ${user.email}? Their historical assessments, scores, actions, and audit records will be preserved. Clerk identities are not deleted.`;
+    if (!confirm(message)) return;
     try {
       await updateUser({ id: user.id, data: { isActive: nextActive } });
       qc.invalidateQueries();
-      toast({ title: nextActive ? "User reactivated" : "User deactivated" });
+      toast({ title: nextActive ? "User reactivated" : "User archived" });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -188,7 +191,7 @@ export default function UsersPage() {
 
       <div className="flex items-center gap-2">
         <Button variant={showInactive ? "default" : "outline"} size="sm" onClick={() => setShowInactive(!showInactive)}>
-          {showInactive ? "Showing inactive" : "Active users only"}
+          {showInactive ? "Showing archived" : "Active users only"}
         </Button>
       </div>
 
@@ -212,7 +215,7 @@ export default function UsersPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleConfig[u.role] ?? ""}`}>{roleLabel[u.role] ?? u.role}</span>
-                    {!u.isActive && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600">Inactive</span>}
+                    {!u.isActive && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600">Archived</span>}
                     {u.role === "super_admin" && <ShieldCheck className="w-4 h-4 text-purple-600" />}
                     {canManage && (
                       <>
@@ -222,8 +225,9 @@ export default function UsersPage() {
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handlePasswordReset(u)} disabled={resettingPassword}>
                           <RotateCcw className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleToggleActive(u)}>
-                          {u.isActive ? "Deactivate" : "Reactivate"}
+                        <Button variant={u.isActive ? "destructive" : "outline"} size="sm" onClick={() => handleToggleActive(u)} className="gap-1">
+                          {u.isActive ? <Archive className="w-3 h-3" /> : <RotateCcw className="w-3 h-3" />}
+                          {u.isActive ? "Archive" : "Reactivate"}
                         </Button>
                       </>
                     )}

@@ -158,7 +158,7 @@ function CompanyDashboard({ companyId }: { companyId: number }) {
 
 function SuperAdminDashboard() {
   const { data, isLoading } = useGetSuperAdminReport();
-  const { data: companies } = useListCompanies();
+  const { data: companies } = useListCompanies({ isActive: true });
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
 
   const scoreByCompanyId: Record<number, number | null> = Object.fromEntries(

@@ -79,7 +79,7 @@ export default function AnalyticsPage() {
   const { selectedCompanyId, setSelectedCompanyId, targetCompanyId } = useSelectedCompany();
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<number[]>([]);
 
-  const { data: companies } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
+  const { data: companies } = useListCompanies({ isActive: true }, { query: { enabled: isSuperAdmin } as any });
 
   const { data: report, isLoading: reportLoading } = useGetCompanyReport(
     targetCompanyId ?? 0,

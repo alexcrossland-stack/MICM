@@ -140,9 +140,10 @@ export default function CompanyInfoPage() {
 
   const canEdit = isSuperAdmin || isCompanyAdmin;
 
-  const { data: companies, isLoading: companiesLoading } = useListCompanies({
-    query: { enabled: isSuperAdmin } as any,
-  });
+  const { data: companies, isLoading: companiesLoading } = useListCompanies(
+    { isActive: true },
+    { query: { enabled: isSuperAdmin } as any },
+  );
 
   const { data: company, isLoading, error } = useGetCompany(
     targetCompanyId ?? 0,

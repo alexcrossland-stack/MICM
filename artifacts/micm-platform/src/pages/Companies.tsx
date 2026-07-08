@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Building2, Pencil } from "lucide-react";
+import { Plus, Building2, Pencil, Archive, RotateCcw } from "lucide-react";
 import { Link } from "wouter";
 
 const SECTORS = ["Manufacturing", "Engineering", "Automotive", "Aerospace", "Food & Drink", "Pharmaceutical", "Electronics", "Defence", "Other"];
@@ -27,8 +27,12 @@ export default function CompaniesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editCompany, setEditCompany] = useState<any>(null);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
+  const [showArchived, setShowArchived] = useState(false);
 
-  const { data: companies, isLoading } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
+  const { data: companies, isLoading } = useListCompanies(
+    { isActive: showArchived ? false : true },
+    { query: { enabled: isSuperAdmin } as any },
+  );
   const { mutateAsync: createCompany, isPending: creating } = useCreateCompany();
   const { mutateAsync: updateCompany, isPending: updating } = useUpdateCompany();
 
@@ -68,12 +72,15 @@ export default function CompaniesPage() {
 
   async function handleToggleActive(company: any) {
     const nextActive = !company.isActive;
-    const action = nextActive ? "reactivate" : "deactivate";
-    if (!confirm(`Are you sure you want to ${action} ${company.name}? Existing records will be preserved.`)) return;
+    const action = nextActive ? "reactivate" : "archive";
+    const message = nextActive
+      ? `Reactivate ${company.name}? It will appear in normal company selectors and lists again.`
+      : `Archive ${company.name}? Existing assessments, actions, reports, and audit history will be preserved. The company will be hidden from normal selectors and lists.`;
+    if (!confirm(message)) return;
     try {
       await updateCompany({ id: company.id, data: { isActive: nextActive } });
       qc.invalidateQueries();
-      toast({ title: nextActive ? "Company reactivated" : "Company deactivated" });
+      toast({ title: nextActive ? "Company reactivated" : "Company archived" });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -86,15 +93,20 @@ export default function CompaniesPage() {
           <h1 className="text-2xl font-bold">Companies</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage client companies on the platform</p>
         </div>
-        <Button onClick={openCreate} className="gap-2"><Plus className="w-4 h-4" />New Company</Button>
+        <div className="flex items-center gap-2">
+          <Button variant={showArchived ? "default" : "outline"} size="sm" onClick={() => setShowArchived(!showArchived)}>
+            {showArchived ? "Showing archived" : "Active companies only"}
+          </Button>
+          <Button onClick={openCreate} className="gap-2"><Plus className="w-4 h-4" />New Company</Button>
+        </div>
       </div>
 
       {!companies?.length ? (
         <Card className="border-dashed border-card-border">
           <CardContent className="flex flex-col items-center py-12 gap-3">
             <Building2 className="w-10 h-10 text-muted-foreground" />
-            <p className="text-muted-foreground text-sm">No companies yet</p>
-            <Button onClick={openCreate} size="sm">Add first company</Button>
+            <p className="text-muted-foreground text-sm">{showArchived ? "No archived companies" : "No active companies yet"}</p>
+            {!showArchived && <Button onClick={openCreate} size="sm">Add first company</Button>}
           </CardContent>
         </Card>
       ) : (
@@ -110,7 +122,7 @@ export default function CompaniesPage() {
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-semibold text-sm truncate">{co.name}</h3>
-                        {!co.isActive && <p className="text-xs text-destructive">Inactive</p>}
+                        {!co.isActive && <p className="text-xs text-destructive">Archived</p>}
                       </div>
                     </div>
                     <div className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -123,8 +135,9 @@ export default function CompaniesPage() {
                     <Button variant="ghost" size="sm" onClick={() => openEdit(co)} className="h-7 w-7 p-0">
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleToggleActive(co)} className="h-7 text-xs">
-                      {co.isActive ? "Deactivate" : "Reactivate"}
+                    <Button variant={co.isActive ? "destructive" : "outline"} size="sm" onClick={() => handleToggleActive(co)} className="h-7 text-xs gap-1">
+                      {co.isActive ? <Archive className="w-3 h-3" /> : <RotateCcw className="w-3 h-3" />}
+                      {co.isActive ? "Archive" : "Reactivate"}
                     </Button>
                   </div>
                 </div>

@@ -29,7 +29,7 @@ export default function AssessmentsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data: companies } = useListCompanies({ query: { enabled: isSuperAdmin } as any });
+  const { data: companies } = useListCompanies({ isActive: true }, { query: { enabled: isSuperAdmin } as any });
   const { data: assessments, isLoading } = useListAssessments(
     targetCompanyId ? { companyId: targetCompanyId } : {},
     { query: { enabled: !isSuperAdmin || !!targetCompanyId } as any }
