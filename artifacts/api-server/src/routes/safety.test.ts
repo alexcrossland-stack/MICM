@@ -72,6 +72,7 @@ const mock = vi.hoisted(() => {
       "orderIndex",
     ]),
     assessmentCyclesTable: makeTable("assessmentCycles", [
+      "questionsVersion", "questionsLockedAt", "questionsOrigin",
       "id",
       "companyId",
       "name",
@@ -90,6 +91,7 @@ const mock = vi.hoisted(() => {
       "createdAt",
     ]),
     scoresTable: makeTable("scores", [
+      "assessmentQuestionId",
       "id",
       "assessmentId",
       "userId",
@@ -100,6 +102,7 @@ const mock = vi.hoisted(() => {
       "updatedAt",
     ]),
     criterionNotesTable: makeTable("criterionNotes", [
+      "assessmentQuestionId",
       "id",
       "companyId",
       "assessmentId",
@@ -255,6 +258,15 @@ const mock = vi.hoisted(() => {
     state.authUserId = "clerk-super";
     state.dbHealthy = true;
     state.rows = seedRows();
+    state.rows.assessmentQuestions = state.rows.assessmentCycles.flatMap(cycle => {
+      Object.assign(cycle, { questionsVersion: 1, questionsOrigin: "legacy_backfill", questionsLockedAt: cycle.status === "draft" ? null : cloneDate(now) });
+      return state.rows.criteria.map(criterion => {
+        const category = state.rows.categories.find(c => c.id === criterion.categoryId)!;
+        const domain = state.rows.domains.find(d => d.id === category.domainId)!;
+        return dated({ ...criterion, id: cycle.id * 10 + criterion.id, assessmentId: cycle.id, sourceCriterionId: criterion.id, domainId: domain.id, domainName: domain.name, domainDescription: domain.description, domainOrder: domain.orderIndex, categoryName: category.name, categoryOrder: category.orderIndex, isIncluded: true });
+      });
+    });
+    for (const row of [...state.rows.scores, ...state.rows.criterionNotes]) row.assessmentQuestionId = row.assessmentId * 10 + row.criterionId;
     state.nextIds = Object.fromEntries(
       Object.entries(state.rows).map(([name, rows]) => [name, Math.max(0, ...rows.map((row) => row.id ?? 0)) + 1]),
     );
@@ -315,6 +327,8 @@ const mock = vi.hoisted(() => {
       return this;
     }
 
+    for() { return this; }
+
     execute() {
       let rows = [...(state.rows[this.tableName] ?? [])].filter((row) => matches(row, this.predicate));
       if (this.order) {
@@ -360,6 +374,7 @@ const mock = vi.hoisted(() => {
           ...value,
         };
         if (tableName === "assessmentCycles" && row.status == null) row.status = "draft";
+        if (tableName === "assessmentCycles") { row.questionsVersion ??= 1; row.questionsOrigin ??= "catalogue_copy"; row.questionsLockedAt ??= null; }
         if (tableName === "assessmentAssignees" && row.completedAt == null) row.completedAt = null;
         if (tableName === "actions") {
           if (row.status == null) row.status = "not_started";
@@ -437,6 +452,10 @@ const mock = vi.hoisted(() => {
   }
 
   const db = {
+    async transaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
+      const before = structuredClone(state.rows);
+      try { return await callback(db); } catch (error) { state.rows = before; throw error; }
+    },
     select: (selection?: any) => new SelectBuilder(selection),
     insert: (table: TableRef) => new InsertBuilder(table),
     update: (table: TableRef) => new UpdateBuilder(table),
@@ -460,9 +479,10 @@ const mock = vi.hoisted(() => {
     return { kind: "raw", text };
   };
 
+  const assessmentQuestionsTable = makeTable("assessmentQuestions", ["id", "assessmentId", "sourceCriterionId", "categoryId", "domainId", "domainName", "domainDescription", "domainOrder", "categoryName", "categoryOrder", "name", "description", "baselineDescription", "excellenceDescription", "orderIndex", "isIncluded", "createdAt", "updatedAt"]);
   reset();
 
-  return { state, reset, tables, db, pool, eq, and, inArray, count, sql, clerkInvitationCreate };
+  return { state, reset, tables: { ...tables, assessmentQuestionsTable }, db, pool, eq, and, inArray, count, sql, clerkInvitationCreate };
 });
 
 vi.mock("@clerk/express", () => ({
@@ -483,7 +503,9 @@ vi.mock("drizzle-orm", () => ({
   sql: mock.sql,
 }));
 
-vi.mock("@workspace/db", () => ({
+vi.mock("../../../../lib/db/src/schema", () => mock.tables);
+vi.mock("@workspace/db", async () => ({
+  ...await vi.importActual("../../../../lib/db/src/questionSnapshots"),
   db: mock.db,
   pool: mock.pool,
   ...mock.tables,
@@ -492,6 +514,154 @@ vi.mock("@workspace/db", () => ({
 function signInAs(clerkUserId: string) {
   mock.state.authUserId = clerkUserId;
 }
+
+function questionInput(q: Row) {
+  return { id: q.id, categoryId: q.categoryId, name: q.name, description: q.description, baselineDescription: q.baselineDescription, excellenceDescription: q.excellenceDescription, orderIndex: q.orderIndex, isIncluded: q.isIncluded };
+}
+
+describe("saved assessment questions", () => {
+  beforeEach(() => mock.reset());
+  const getSet = async (id = 101) => {
+    const response = await request(app).get(`/api/assessments/${id}/questions`);
+    expect(response.status).toBe(200);
+    return response.body;
+  };
+  const saveSet = (questions: Row[], version = 1, id = 101) => request(app).put(`/api/assessments/${id}/questions`).send({ expectedQuestionsVersion: version, questions: questions.map(questionInput) });
+
+  it("copies the catalogue at creation without editing other assessments", async () => {
+    const created = await request(app).post("/api/assessments").send({ companyId: 2, name: "QA TEST - Questions" });
+    expect(created.status).toBe(201);
+    const set = await getSet(created.body.id);
+    expect(set.companyId).toBe(2);
+    expect(set.questions).toHaveLength(3);
+    expect(set.signature).toBe((await getSet(101)).signature);
+    mock.state.rows.criteria[0].name = "Future catalogue wording";
+    expect((await getSet(created.body.id)).questions[0].name).toBe("Strategy criterion 1");
+  });
+
+  it("edits text/guidance/category, adds duplicate wording, removes/restores and audits atomically", async () => {
+    const before = await getSet();
+    const other = await getSet(102);
+    const rows = before.questions.map(questionInput);
+    rows[0] = { ...rows[0], name: "Custom strategy", description: "Full text", baselineDescription: "Custom baseline", excellenceDescription: "Custom excellence", categoryId: 2, orderIndex: 4 };
+    rows[1].isIncluded = false;
+    rows.push({ ...rows[0], id: undefined });
+    const saved = await saveSet(rows);
+    expect(saved.status).toBe(200);
+    expect(saved.body).toMatchObject({ version: 2, customised: true, includedCount: 3 });
+    expect(saved.body.questions.filter((q: Row) => q.name === "Custom strategy")).toHaveLength(2);
+    expect(saved.body.questions.find((q: Row) => q.sourceCriterionId === null).domainName).toBe("Operations");
+    expect((await getSet(102)).signature).toBe(other.signature);
+    expect(mock.state.rows.criteria[0].name).toBe("Strategy criterion 1");
+    expect(mock.state.rows.auditLogs.at(-1)).toMatchObject({ companyId: 1, eventType: "assessment.questions_changed", actorUserId: 1 });
+    expect(JSON.stringify(mock.state.rows.auditLogs)).not.toContain("Custom baseline");
+    const restored = await saveSet(saved.body.questions.map((q: Row) => ({ ...q, isIncluded: true })), 2);
+    expect(restored.body.includedCount).toBe(4);
+    expect((await saveSet(restored.body.questions, 3)).body.version).toBe(3);
+  });
+
+  it("rejects stale versions, foreign IDs, missing rows, invalid fields and partial writes", async () => {
+    const set = await getSet();
+    const inputs = set.questions.map(questionInput);
+    expect((await saveSet(inputs, 999)).status).toBe(409);
+    expect((await saveSet(inputs.slice(1))).status).toBe(400);
+    expect((await saveSet([{ ...inputs[0], id: 2011 }, ...inputs.slice(1)])).status).toBe(400);
+    expect((await saveSet([{ ...inputs[0], name: "Temporary edit" }, { ...inputs[1], categoryId: 999 }, inputs[2]])).status).toBe(400);
+    expect((await getSet()).signature).toBe(set.signature);
+    for (const invalid of [{ name: " " }, { orderIndex: 0.5 }, { categoryId: 1.5 }, { name: "x".repeat(501) }]) {
+      expect((await saveSet([{ ...inputs[0], ...invalid }, ...inputs.slice(1)])).status).toBe(400);
+    }
+    expect((await request(app).put("/api/assessments/101/questions").send({ expectedQuestionsVersion: 1, questions: [{ ...inputs[0], companyId: 2 }, ...inputs.slice(1)] })).status).toBe(400);
+    expect((await request(app).patch("/api/assessments/101").send({ questionsLockedAt: null })).status).toBe(400);
+  });
+
+  it("enforces Super Admin edits and assigned, same-company reads server-side", async () => {
+    const set = await getSet();
+    for (const role of ["clerk-admin-a", "clerk-user-a", "clerk-admin-b", "clerk-user-b"]) {
+      signInAs(role);
+      expect((await saveSet(set.questions)).status).toBe(403);
+      expect((await request(app).post("/api/assessments/101/revisions").send({ name: "Revision", expectedQuestionsVersion: 1 })).status).toBe(403);
+    }
+    signInAs("clerk-user-a");
+    expect((await request(app).get("/api/assessments/101/questions")).status).toBe(403);
+    expect((await request(app).get("/api/assessments/101/results")).status).toBe(403);
+    expect((await request(app).get("/api/assessments/102/questions")).status).toBe(200);
+    expect((await request(app).get("/api/assessments/102/questions?includeRemoved=true")).status).toBe(403);
+    expect((await request(app).get("/api/assessments/201/questions")).status).toBe(403);
+    signInAs("clerk-admin-a");
+    expect((await request(app).get("/api/assessments/101/questions")).status).toBe(200);
+    expect((await request(app).get("/api/assessments/201/questions")).status).toBe(403);
+  });
+
+  it("locks active/answered/completed sets and revisions copy no responses or assignments", async () => {
+    for (const id of [102, 103]) expect((await saveSet((await getSet(id)).questions, 1, id)).status).toBe(409);
+    expect((await request(app).patch("/api/assessments/103").send({ status: "draft" })).status).toBe(409);
+    const note = await request(app).post("/api/assessment-criterion-notes").send({ assessmentId: 101, criterionId: 1, note: "Draft evidence locks text" });
+    expect(note.status).toBe(201);
+    expect((await getSet()).canEdit).toBe(false);
+    expect((await saveSet((await getSet()).questions)).status).toBe(409);
+    const revision = await request(app).post("/api/assessments/103/revisions").send({ name: "QA TEST - Revision", expectedQuestionsVersion: 1 });
+    expect(revision.status).toBe(201);
+    expect(revision.body).toMatchObject({ companyId: 1, status: "draft", assignedUserIds: [], completedUserIds: [] });
+    expect((await getSet(revision.body.id)).signature).toBe((await getSet(103)).signature);
+    expect(mock.state.rows.scores.filter(r => r.assessmentId === revision.body.id)).toEqual([]);
+    expect(mock.state.rows.criterionNotes.filter(r => r.assessmentId === revision.body.id)).toEqual([]);
+  });
+
+  it("returns unanswered active work to draft but rejects stale score submissions", async () => {
+    expect((await request(app).patch("/api/assessments/102").send({ status: "draft", expectedQuestionsVersion: 1 })).status).toBe(200);
+    const draft = await getSet(102);
+    expect(draft).toMatchObject({ version: 2, canEdit: true });
+    expect((await request(app).patch("/api/assessments/102").send({ status: "active", expectedQuestionsVersion: 2 })).status).toBe(200);
+    signInAs("clerk-user-a");
+    expect((await request(app).post("/api/scores").send({ assessmentId: 102, questionsVersion: 1, scores: [{ assessmentQuestionId: draft.questions[0].id, score: 2 }] })).status).toBe(409);
+    expect(mock.state.rows.scores.filter(r => r.assessmentId === 102)).toEqual([]);
+  });
+
+  it("completes a customised assessment using only included questions, including custom evidence and exports", async () => {
+    const set = await getSet();
+    const saved = await saveSet([...set.questions.map((q: Row) => ({ ...q, isIncluded: false })), { categoryId: 1, name: "QA custom question", description: "Custom supporting text", baselineDescription: "QA baseline", excellenceDescription: "QA excellence", orderIndex: 0, isIncluded: true }]);
+    expect(saved.status).toBe(200);
+    const custom = saved.body.questions.find((q: Row) => q.sourceCriterionId === null);
+    expect((await request(app).patch("/api/assessments/101").send({ status: "active", expectedQuestionsVersion: 2 })).status).toBe(200);
+    expect((await request(app).patch("/api/assessments/101").send({ status: "completed", expectedQuestionsVersion: 2 })).status).toBe(400);
+    for (const scores of [[{ criterionId: 1, score: 2 }], [{ assessmentQuestionId: 2011, score: 2 }], [{ assessmentQuestionId: custom.id, score: 4.5 }], [{ assessmentQuestionId: custom.id, score: 2 }, { assessmentQuestionId: custom.id, score: 2 }]]) {
+      expect((await request(app).post("/api/scores").send({ assessmentId: 101, questionsVersion: 2, scores })).status).toBe(400);
+    }
+    expect(mock.state.rows.assessmentAssignees.filter(r => r.assessmentId === 101)).toEqual([]);
+    expect((await request(app).post("/api/scores").send({ assessmentId: 101, questionsVersion: 2, scores: [{ assessmentQuestionId: custom.id, score: 4 }] })).status).toBe(200);
+    const note = await request(app).post("/api/assessment-criterion-notes").send({ assessmentId: 101, questionsVersion: 2, assessmentQuestionId: custom.id, note: "Custom evidence" });
+    expect(note.body).toMatchObject({ assessmentQuestionId: custom.id, criterionId: null, questionName: "QA custom question" });
+    expect((await request(app).patch("/api/assessments/101").send({ status: "completed", expectedQuestionsVersion: 2 })).status).toBe(200);
+    const results = await request(app).get("/api/assessments/101/results");
+    expect(results.body.aggregateScores).toEqual(expect.arrayContaining([expect.objectContaining({ domainId: 1, score: 4 }), expect.objectContaining({ domainId: 2, score: null })]));
+    mock.state.rows.assessmentCycles.find(c => c.id === 101)!.createdAt = new Date("2027-01-01T00:00:00Z");
+    mock.state.rows.assessmentCycles.find(c => c.id === 101)!.updatedAt = new Date("2027-01-01T00:00:00Z");
+    for (const format of ["csv", "pdf", "xlsx"]) {
+      const response = await request(app).get(`/api/reports/company/1/export?template=operational_detail&format=${format}`);
+      expect(response.status).toBe(200);
+      const content = Buffer.isBuffer(response.body) ? response.body.toString() : response.text;
+      expect(content).toContain("QA custom question");
+      expect(content).toContain("QA baseline");
+      expect(content).not.toContain("Beta evidence note");
+    }
+  });
+
+  it("excludes empty sets from activation and keeps questionnaire cohorts separate", async () => {
+    const set = await getSet();
+    expect((await saveSet(set.questions.map((q: Row) => ({ ...q, isIncluded: false })))).status).toBe(200);
+    expect((await request(app).patch("/api/assessments/101").send({ status: "active", expectedQuestionsVersion: 2 })).status).toBe(400);
+    mock.state.rows.assessmentQuestions.find(q => q.assessmentId === 202)!.name = "Different questionnaire";
+    const programme = await request(app).get("/api/reports/programme");
+    expect(programme.status).toBe(200);
+    expect(programme.body.questionSetCohorts).toHaveLength(2);
+    expect(programme.body.heatmap).toHaveLength(1);
+    const other = programme.body.questionSetCohorts.find((c: Row) => c.signature !== programme.body.selectedQuestionSetSignature);
+    const filtered = await request(app).get(`/api/reports/programme?questionSetSignature=${other.signature}`);
+    expect(filtered.body.heatmap).toHaveLength(1);
+    expect(filtered.body.heatmap[0].companyId).not.toBe(programme.body.heatmap[0].companyId);
+  });
+});
 
 afterEach(() => {
   delete process.env.CLERK_SECRET_KEY;

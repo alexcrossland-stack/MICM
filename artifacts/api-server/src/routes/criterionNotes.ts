@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, loadAssessmentQuestions } from "@workspace/db";
 import { usersTable, assessmentCyclesTable, assessmentAssigneesTable, criteriaTable, criterionNotesTable } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -10,6 +10,7 @@ import {
 import { formatCriterionNote } from "../lib/criterionNotes";
 import { requireAuth } from "./auth";
 import { recordAuditEvent } from "../lib/audit";
+import { authorizeQuestions, checkQuestionsVersion, QuestionError, questionRoute, resolveQuestion } from "../lib/assessmentQuestions";
 
 const router: IRouter = Router();
 
@@ -34,19 +35,21 @@ async function getAssessmentForNotesAccess(currentUser: any, assessmentId: numbe
   return { cycle } as const;
 }
 
-async function getFormattedCriterionNotes(assessmentId: number, criterionId?: number | null) {
-  const notes = criterionId
+async function getFormattedCriterionNotes(assessmentId: number, criterionId?: number | null, questionId?: number) {
+  const questions = await loadAssessmentQuestions(db, assessmentId);
+  const rows = criterionId
     ? await db.select().from(criterionNotesTable).where(
         and(eq(criterionNotesTable.assessmentId, assessmentId), eq(criterionNotesTable.criterionId, criterionId)),
       )
     : await db.select().from(criterionNotesTable).where(eq(criterionNotesTable.assessmentId, assessmentId));
+  const notes = questionId ? rows.filter(note => note.assessmentQuestionId === questionId) : rows;
   const authorIds = [...new Set(notes.map((note: any) => note.authorUserId))];
   const authors = authorIds.length > 0
     ? await db.select().from(usersTable).where(inArray(usersTable.id, authorIds))
     : [];
   const authorById = new Map(authors.map((author: any) => [author.id, author]));
 
-  return notes.map((note: any) => formatCriterionNote(note, authorById.get(note.authorUserId)));
+  return notes.map((note: any) => formatCriterionNote(note, authorById.get(note.authorUserId), questions.find(q => q.id === note.assessmentQuestionId)));
 }
 
 // GET /assessment-criterion-notes
@@ -60,31 +63,31 @@ router.get("/assessment-criterion-notes", requireAuth, async (req: any, res): Pr
   const access = await getAssessmentForNotesAccess(currentUser, query.data.assessmentId);
   if ("error" in access) { res.status(access.status ?? 403).json({ error: access.error }); return; }
 
-  const result = await getFormattedCriterionNotes(query.data.assessmentId, query.data.criterionId);
+  const result = await getFormattedCriterionNotes(query.data.assessmentId, query.data.criterionId, query.data.assessmentQuestionId);
   res.json(ListCriterionNotesResponse.parse(result));
 });
 
 // POST /assessment-criterion-notes
-router.post("/assessment-criterion-notes", requireAuth, async (req: any, res): Promise<void> => {
+router.post("/assessment-criterion-notes", requireAuth, questionRoute(async (req: any, res): Promise<void> => {
   const currentUser = await getCurrentUser(req);
   if (!currentUser) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  const parsed = CreateCriterionNoteBody.safeParse(req.body);
+  const parsed = CreateCriterionNoteBody.strict().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const note = parsed.data.note.trim();
   if (note.length === 0) { res.status(400).json({ error: "Note is required" }); return; }
 
-  const access = await getAssessmentForNotesAccess(currentUser, parsed.data.assessmentId);
-  if ("error" in access) { res.status(access.status ?? 403).json({ error: access.error }); return; }
-
-  const [criterion] = await db.select().from(criteriaTable).where(eq(criteriaTable.id, parsed.data.criterionId));
-  if (!criterion) { res.status(404).json({ error: "Criterion not found" }); return; }
-
-  const [saved] = await db.insert(criterionNotesTable).values({
-    companyId: access.cycle.companyId,
+  const result = await db.transaction(async tx => {
+  const [record] = await tx.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, parsed.data.assessmentId)).for("update");
+  const cycle = await authorizeQuestions(tx, record, currentUser, true);
+  checkQuestionsVersion(cycle, parsed.data.questionsVersion);
+  const question = resolveQuestion(await loadAssessmentQuestions(tx, cycle.id), parsed.data);
+  const [saved] = await tx.insert(criterionNotesTable).values({
+    companyId: cycle.companyId,
     assessmentId: parsed.data.assessmentId,
-    criterionId: parsed.data.criterionId,
+    criterionId: question.sourceCriterionId,
+    assessmentQuestionId: question.id,
     authorUserId: currentUser.id,
     note,
   }).returning();
@@ -92,7 +95,7 @@ router.post("/assessment-criterion-notes", requireAuth, async (req: any, res): P
   await recordAuditEvent(req, {
     currentUser,
     eventType: "criterion_note.created",
-    companyId: access.cycle.companyId,
+    companyId: cycle.companyId,
     targetType: "criterion_note",
     targetId: saved.id,
     metadata: {
@@ -100,9 +103,11 @@ router.post("/assessment-criterion-notes", requireAuth, async (req: any, res): P
       criterionId: saved.criterionId,
       authorUserId: saved.authorUserId,
     },
+  }, tx);
+  if (!cycle.questionsLockedAt) await tx.update(assessmentCyclesTable).set({ questionsLockedAt: new Date() }).where(eq(assessmentCyclesTable.id, cycle.id));
+  return formatCriterionNote(saved, currentUser, question);
   });
-
-  res.status(201).json(ListCriterionNotesResponse.parse([formatCriterionNote(saved, currentUser)])[0]);
-});
+  res.status(201).json(ListCriterionNotesResponse.parse([result])[0]);
+}));
 
 export default router;

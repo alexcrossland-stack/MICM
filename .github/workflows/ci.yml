@@ -10,6 +10,18 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: micm_test
+          POSTGRES_DB: micm_questions_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U micm_test -d micm_questions_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
 
     steps:
       - name: Check out repository
@@ -33,6 +45,8 @@ jobs:
         run: git diff --check
 
       - name: Run tests
+        env:
+          MICM_QUESTION_TEST_DATABASE_URL: postgresql://micm_test@127.0.0.1:5432/micm_questions_test
         run: pnpm test
 
       - name: Run typecheck

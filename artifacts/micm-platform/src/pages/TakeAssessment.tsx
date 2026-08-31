@@ -1,7 +1,8 @@
 import { useRoute, useLocation } from "wouter";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { companyScopedPath } from "@/hooks/useSelectedCompany";
-import { useGetAssessment, useListDomains, useListScores, useSubmitScores, useUpdateAssessment } from "@workspace/api-client-react";
+import { useGetAssessment, useGetAssessmentQuestions, useListScores, useSubmitScores, useUpdateAssessment, type AssessmentQuestionSet } from "@workspace/api-client-react";
+import { assessmentQuestionDomains } from "@/lib/assessmentQuestions";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,10 @@ type ScoreMap = Record<number, { score: number; notes: string }>;
 export default function TakeAssessmentPage() {
   const [, params] = useRoute("/assessments/:id/take");
   const id = Number(params?.id);
+  return <AssessmentScoring key={id} id={id} />;
+}
+
+function AssessmentScoring({ id }: { id: number }) {
   const [, navigate] = useLocation();
   const { userId, isSuperAdmin } = useCurrentUser();
   const qc = useQueryClient();
@@ -34,7 +39,10 @@ export default function TakeAssessmentPage() {
   const [saving, setSaving] = useState(false);
 
   const { data: assessment } = useGetAssessment(id);
-  const { data: domains } = useListDomains();
+  const { data: latestQuestions, error: questionError } = useGetAssessmentQuestions(id);
+  const [questionSet, setQuestionSet] = useState<AssessmentQuestionSet>();
+  useEffect(() => { if (latestQuestions && !questionSet) setQuestionSet(latestQuestions); }, [latestQuestions, questionSet]);
+  const domains = questionSet ? assessmentQuestionDomains(questionSet.questions) : undefined;
   const { data: existingScores } = useListScores(
     { assessmentId: id, userId: userId ?? undefined },
     { query: { enabled: !!userId } as any }
@@ -46,12 +54,14 @@ export default function TakeAssessmentPage() {
     if (existingScores) {
       const map: ScoreMap = {};
       existingScores.forEach((s: any) => {
-        map[s.criterionId] = { score: s.score, notes: s.notes ?? "" };
+        if (s.assessmentQuestionId != null) map[s.assessmentQuestionId] = { score: s.score, notes: s.notes ?? "" };
       });
       setScores(map);
     }
   }, [existingScores]);
 
+  if (questionError) return <p role="alert">Assessment questions could not be loaded. Refresh or contact your administrator.</p>;
+  if (questionSet && latestQuestions?.version !== questionSet.version) return <p role="alert">The assessment questions changed. Reload this page before entering scores for the new version. Unsaved answers have not been submitted.</p>;
   if (!domains || !assessment) return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   const domainList = domains as any[];
@@ -70,20 +80,20 @@ export default function TakeAssessmentPage() {
       const scoresToSubmit = domainCriteria
         .filter((crit: any) => scores[crit.id] != null)
         .map((crit: any) => ({
-          criterionId: crit.id,
+          assessmentQuestionId: crit.id,
           score: scores[crit.id].score,
           notes: scores[crit.id].notes || undefined,
         }));
 
       if (scoresToSubmit.length > 0) {
-        await submitScores({ data: { assessmentId: id, scores: scoresToSubmit } });
+        await submitScores({ data: { assessmentId: id, questionsVersion: questionSet?.version, scores: scoresToSubmit } });
         qc.invalidateQueries();
       }
 
       if (final) {
         const finalScoredCount = Object.keys(scores).length;
         if (isSuperAdmin && finalScoredCount === totalCriteria) {
-          await updateAssessment({ id, data: { status: "completed" } });
+          await updateAssessment({ id, data: { status: "completed", expectedQuestionsVersion: questionSet?.version } });
           toast({
             title: "Assessment completed",
             description: "Gap Analysis is now available for this company.",

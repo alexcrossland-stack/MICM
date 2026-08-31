@@ -137,6 +137,17 @@ function buildCompanyReportCsv(composition: ReportComposition) {
     }
   }
 
+  if (composition.questionSet) {
+    rows.push([composition.template, "question_set", String(composition.coverSummary.companyId), composition.coverSummary.companyName, "", `Version ${composition.questionSet.version}: ${composition.questionSet.includedCount} questions`, "", "", "", "", composition.questionSet.signature, ""]);
+    for (const q of composition.questionSet.questions) {
+      for (const [field, value] of [["Question", q.name], ["Description", q.description], ["Baseline (0)", q.baselineDescription], ["Excellence (4)", q.excellenceDescription]]) {
+        rows.push([composition.template, "assessment_question", String(composition.coverSummary.companyId), composition.coverSummary.companyName, String(q.id), `${q.categoryName} / ${field}`, "", "", q.domainName, "", value ?? "", ""]);
+      }
+    }
+  }
+  for (const note of composition.evidenceNotes.preview) {
+    rows.push([composition.template, "evidence_note", String(composition.coverSummary.companyId), composition.coverSummary.companyName, "", note.questionLabel, note.createdAt, "", "", "", note.note, ""]);
+  }
   return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n") + "\n";
 }
 
@@ -154,11 +165,13 @@ function buildCompanyReportPdf(composition: ReportComposition) {
   }
   if (composition.includedSections.includes("action_roadmap")) {
     pages.push(buildPdfActionAndEvidencePage(composition));
+    if (composition.evidenceNotes.preview.length) pages.push(...buildPaginatedTextPages("Evidence notes", composition, composition.evidenceNotes.preview.map(note => [note.questionLabel, `${note.authorName} | ${note.createdAt}`, note.note])));
   }
   if (composition.includedSections.includes("benchmarking")) {
     pages.push(buildPdfBenchmarkingPage(composition));
   }
 
+  if (composition.questionSet?.questions.length) pages.push(...buildPdfQuestionPages(composition));
   return buildStyledPdf(pages);
 }
 
@@ -179,6 +192,7 @@ function buildCompanyReportWorkbook(composition: ReportComposition) {
         ["Challenges", composition.companyInfo.currentChallenges.join("; ")],
         ["Stakeholder engagement", formatStakeholderEngagement(composition.companyInfo.stakeholderEngagement)],
         ["Executive summary", composition.executiveSummary.headline],
+        ["Question set", composition.questionSet ? `v${composition.questionSet.version}: ${composition.questionSet.includedCount} questions (${composition.questionSet.signature})` : "Not available"],
       ],
     },
     {
@@ -222,6 +236,13 @@ function buildCompanyReportWorkbook(composition: ReportComposition) {
       ],
     });
   }
+  if (composition.questionSet?.questions.length) sheets.push({ name: "Questions", rows: [
+    ["Question ID", "Domain", "Category", "Question", "Description", "Baseline (0)", "Excellence (4)"],
+    ...composition.questionSet.questions.map(q => [q.id, q.domainName, q.categoryName, q.name, q.description ?? "", q.baselineDescription ?? "", q.excellenceDescription ?? ""]),
+  ] });
+  if (composition.evidenceNotes.preview.length) sheets.push({ name: "Evidence Notes", rows: [
+    ["Question", "Note", "Date"], ...composition.evidenceNotes.preview.map(note => [note.questionLabel, note.note, note.createdAt]),
+  ] });
   return buildXlsx(sheets);
 }
 
@@ -460,11 +481,7 @@ function buildPdfActionAndEvidencePage(composition: ReportComposition): PdfComma
   if (composition.evidenceNotes.preview.length === 0) {
     commands.push(text("No evidence notes have been added yet.", PDF_MARGIN_X, y, 10, "regular", PDF_MUTED));
   } else {
-    for (const note of composition.evidenceNotes.preview.slice(0, 4)) {
-      commands.push(text(`${note.authorName} | ${note.createdAt}`, PDF_MARGIN_X, y, 9, "bold", PDF_TEXT));
-      y = addWrappedText(commands, note.note, PDF_MARGIN_X, y - 15, 88, 12, 9, "regular", PDF_MUTED) - 8;
-      if (y < 86) break;
-    }
+    commands.push(text("See the following evidence pages for saved question wording and notes.", PDF_MARGIN_X, y, 10, "regular", PDF_MUTED));
   }
   return commands;
 }
@@ -500,6 +517,28 @@ function pageScaffold(title: string, composition: ReportComposition): PdfCommand
     rect(PDF_MARGIN_X, 676, 520, 1, PDF_LIGHT_GREY),
     text(composition.templateLabel, PDF_MARGIN_X, 38, 8, "regular", PDF_MUTED),
   ];
+}
+
+function buildPdfQuestionPages(composition: ReportComposition): PdfCommand[][] {
+  return buildPaginatedTextPages("Assessment questions", composition, (composition.questionSet?.questions ?? []).map(q => [`${q.domainName} / ${q.categoryName}`, q.name, q.description ?? "", `Baseline (0): ${q.baselineDescription ?? ""}`, `Excellence (4): ${q.excellenceDescription ?? ""}`]));
+}
+
+function buildPaginatedTextPages(title: string, composition: ReportComposition, blocks: string[][]): PdfCommand[][] {
+  const pages: PdfCommand[][] = [];
+  let commands = pageScaffold(title, composition);
+  let y = 650;
+  for (const paragraphs of blocks) {
+    for (const paragraph of paragraphs) {
+      for (const line of wrapText(paragraph, 86)) {
+        if (y < 76) { pages.push(commands); commands = pageScaffold(`${title} (continued)`, composition); y = 650; }
+        commands.push(text(line, PDF_MARGIN_X, y, 9, "regular", PDF_TEXT)); y -= 13;
+      }
+      y -= 5;
+    }
+    y -= 12;
+  }
+  pages.push(commands);
+  return pages;
 }
 
 function metricCard(commands: PdfCommand[], x: number, y: number, label: string, value: string) {
@@ -578,7 +617,7 @@ function fillColor(color: PdfColor) {
 }
 
 function wrapText(value: string, maxChars: number) {
-  const words = normalizePdfText(value).split(" ").filter(Boolean);
+  const words = normalizePdfText(value).split(" ").filter(Boolean).flatMap(word => word.match(new RegExp(`.{1,${maxChars}}`, "g")) ?? []);
   const lines: string[] = [];
   let current = "";
   for (const word of words) {
@@ -612,6 +651,7 @@ function statusSummary(byStatus: Record<string, number>) {
 }
 
 function escapeCsvCell(value: string) {
+  if (/^\s*[=+@-]/.test(value)) value = `'${value}`;
   if (!/[",\n\r]/.test(value)) return value;
   return `"${value.replace(/"/g, '""')}"`;
 }

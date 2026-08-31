@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { assessmentProgressPoints, differentQuestionSets } from "@/lib/assessmentQuestions";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useSelectedCompany } from "@/hooks/useSelectedCompany";
 import {
@@ -146,12 +147,7 @@ export default function AnalyticsPage() {
   });
 
   // Progress chart data
-  const progressData = (progress?.cycles ?? []).map((c: any) => {
-    const point: any = { name: c.assessmentName };
-    c.domainScores.forEach((d: any) => { point[d.domainName] = d.score; });
-    point["Overall"] = c.overallScore;
-    return point;
-  });
+  const progressData = assessmentProgressPoints(progress?.cycles ?? []);
 
   // Target overlay for radar chart
   const targetRadarData = radarData && targets && targets.length > 0
@@ -363,6 +359,7 @@ export default function AnalyticsPage() {
                   Maturity Progress Over Time
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">Score trends across assessment cycles</p>
+                {differentQuestionSets(progress?.cycles) && <p className="text-xs text-muted-foreground">Question sets changed between assessments. Trend lines stop at these changes; scores are not directly comparable.</p>}
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={280}>

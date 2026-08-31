@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { assessmentProgressPoints, differentQuestionSets } from "@/lib/assessmentQuestions";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useSelectedCompany } from "@/hooks/useSelectedCompany";
 import {
@@ -121,13 +122,7 @@ export default function ReportsPage() {
     { query: { enabled: selectedAssessmentIds.length > 0 } as any },
   );
 
-  const progressData =
-    progress?.cycles?.map((c: any) => {
-      const point: any = { name: c.assessmentName };
-      c.domainScores.forEach((d: any) => { point[d.domainName] = d.score; });
-      point["Overall"] = c.overallScore;
-      return point;
-    }) ?? [];
+  const progressData = assessmentProgressPoints(progress?.cycles ?? []);
 
   const completedAssessments = (assessments ?? []).filter((a) => a.status === "completed");
   const canExportReports = isSuperAdmin || isCompanyAdmin;
@@ -470,7 +465,7 @@ export default function ReportsPage() {
                   {recentReportNotes.map((note) => (
                     <div key={note.id} className="rounded-md border border-border bg-muted/30 p-3">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-medium">Criterion {note.criterionId}</p>
+                        <p className="text-xs font-medium">{[note.domainName, note.categoryName, note.questionName].filter(Boolean).join(" / ") || `Criterion ${note.criterionId}`}</p>
                         <p className="text-xs text-muted-foreground">{new Date(note.createdAt).toLocaleDateString()}</p>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{note.authorName}</p>
@@ -525,6 +520,7 @@ export default function ReportsPage() {
                   <TrendingUp className="w-4 h-4" />
                   Progress Over Time
                 </CardTitle>
+                {differentQuestionSets(progress?.cycles) && <p className="text-xs text-muted-foreground">Question sets changed between assessments. Trend lines stop at these changes; scores are not directly comparable.</p>}
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>

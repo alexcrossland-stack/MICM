@@ -1,5 +1,7 @@
 import { db } from "@workspace/db";
 import { domainsTable, categoriesTable, criteriaTable } from "@workspace/db";
+import { sql } from "drizzle-orm";
+import { assertEmptyDomainCatalogue } from "./domainSeedGuards";
 
 const MICM_DOMAINS = [
   {
@@ -136,13 +138,15 @@ const MICM_DOMAINS = [
 async function seed() {
   console.log("Seeding MICM domains, categories and criteria...");
 
-  // Clear existing
-  await db.delete(criteriaTable);
-  await db.delete(categoriesTable);
-  await db.delete(domainsTable);
-
+  await db.transaction(async tx => {
+  await tx.execute(sql`LOCK TABLE domains, categories, criteria IN SHARE ROW EXCLUSIVE MODE`);
+  assertEmptyDomainCatalogue([
+    (await tx.select().from(domainsTable).limit(1)).length,
+    (await tx.select().from(categoriesTable).limit(1)).length,
+    (await tx.select().from(criteriaTable).limit(1)).length,
+  ]);
   for (const [domainIdx, domainData] of MICM_DOMAINS.entries()) {
-    const [domain] = await db.insert(domainsTable).values({
+    const [domain] = await tx.insert(domainsTable).values({
       name: domainData.name,
       description: domainData.description,
       orderIndex: domainIdx,
@@ -151,14 +155,14 @@ async function seed() {
     console.log(`  Domain: ${domain.name}`);
 
     for (const [catIdx, catData] of domainData.categories.entries()) {
-      const [category] = await db.insert(categoriesTable).values({
+      const [category] = await tx.insert(categoriesTable).values({
         domainId: domain.id,
         name: catData.name,
         orderIndex: catIdx,
       }).returning();
 
       for (const [critIdx, critData] of catData.criteria.entries()) {
-        await db.insert(criteriaTable).values({
+        await tx.insert(criteriaTable).values({
           categoryId: category.id,
           name: critData.name,
           baselineDescription: critData.baseline,
@@ -169,6 +173,7 @@ async function seed() {
     }
   }
 
+  });
   console.log("Seeding complete!");
   process.exit(0);
 }

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, loadAssessmentQuestions, questionSetSignature } from "@workspace/db";
 import { usersTable, companiesTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable, criterionNotesTable } from "@workspace/db";
 import { eq, and, count, sql, inArray } from "drizzle-orm";
 import {
@@ -22,6 +22,7 @@ import {
 } from "../lib/reportComposition";
 import { formatCriterionNote } from "../lib/criterionNotes";
 import { recordAuditEvent } from "../lib/audit";
+import { questionScoreContext, questionSetPayload } from "../lib/assessmentQuestions";
 import { COMPANY_CHALLENGE_OPTIONS, normalizeCompanyChallenges, normalizeStakeholderEngagement } from "../lib/companyInfo";
 
 const router: IRouter = Router();
@@ -39,20 +40,14 @@ function formatCompany(c: any) {
 }
 
 async function getDomainScoresForCycle(cycleId: number) {
+  const scoreContext = await questionScoreContext(cycleId);
   const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
-  const allCategories = await db.select().from(categoriesTable);
-  const allCriteria = await db.select().from(criteriaTable);
   const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, cycleId));
 
-  const catToDomain: Record<number, number> = {};
-  for (const cat of allCategories) catToDomain[cat.id] = cat.domainId;
-  const critToCategory: Record<number, number> = {};
-  for (const crit of allCriteria) critToCategory[crit.id] = crit.categoryId;
 
   const domainMap: Record<number, number[]> = {};
   for (const s of scores) {
-    const catId = critToCategory[s.criterionId];
-    const dId = catId ? catToDomain[catId] : null;
+    const dId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
     if (dId) { if (!domainMap[dId]) domainMap[dId] = []; domainMap[dId].push(s.score); }
   }
 
@@ -89,7 +84,8 @@ async function buildCompanyReport(companyId: number) {
     ? await db.select().from(usersTable).where(inArray(usersTable.id, noteAuthorIds))
     : [];
   const noteAuthorById = new Map(noteAuthors.map((author: any) => [author.id, author]));
-  const notesFormatted = companyNotes.map((note: any) => formatCriterionNote(note, noteAuthorById.get(note.authorUserId)));
+  const companyQuestions = (await Promise.all(assessmentCycles.map(cycle => loadAssessmentQuestions(db, cycle.id)))).flat();
+  const notesFormatted = companyNotes.map((note: any) => formatCriterionNote(note, noteAuthorById.get(note.authorUserId), companyQuestions.find(q => q.id === note.assessmentQuestionId)));
 
   const cyclesFormatted = await Promise.all(assessmentCycles.map(async (cycle: any) => {
     const assignees = await db.select().from(assessmentAssigneesTable).where(eq(assessmentAssigneesTable.assessmentId, cycle.id));
@@ -112,6 +108,7 @@ async function buildCompanyReport(companyId: number) {
     return {
       assessmentId: cycle.id,
       assessmentName: cycle.name,
+      questionSetSignature: questionSetSignature(companyQuestions.filter(q => q.assessmentId === cycle.id)),
       completedAt: cycle.updatedAt instanceof Date ? cycle.updatedAt.toISOString() : cycle.updatedAt,
       domainScores,
       overallScore,
@@ -139,6 +136,7 @@ async function buildCompanyReport(companyId: number) {
       userScores: [],
       aggregateScores: domainScores,
       criterionNotes: notesFormatted.filter((note: any) => note.assessmentId === latestCycle.id),
+      questionSet: await questionSetPayload(db, latestCycle),
     };
   }
 
@@ -230,15 +228,8 @@ router.get("/reports/cross-company-radar", requireAuth, async (req: any, res): P
   const COLORS = ["#6b8ef5", "#f5a97c", "#9cf5a4", "#f5e97c", "#c47cf5", "#7cf5e5"];
 
   const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
-  const allCategories = await db.select().from(categoriesTable);
-  const allCriteria = await db.select().from(criteriaTable);
 
-  const catToDomain: Record<number, number> = {};
-  for (const cat of allCategories) catToDomain[cat.id] = cat.domainId;
-  const critToCategory: Record<number, number> = {};
-  for (const crit of allCriteria) critToCategory[crit.id] = crit.categoryId;
-
-  const series: Array<{ label: string; scores: (number | null)[]; color: string }> = [];
+  const series: Array<{ label: string; scores: (number | null)[]; color: string; questionSetSignature?: string }> = [];
 
   for (const [idx, companyId] of companyIds.entries()) {
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
@@ -264,11 +255,11 @@ router.get("/reports/cross-company-radar", requireAuth, async (req: any, res): P
     )[0];
 
     const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, latestCycle.id));
+    const scoreContext = await questionScoreContext(latestCycle.id);
 
     const domainMap: Record<number, number[]> = {};
     for (const s of scores) {
-      const catId = critToCategory[s.criterionId];
-      const dId = catId != null ? catToDomain[catId] : null;
+      const dId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
       if (dId) {
         if (!domainMap[dId]) domainMap[dId] = [];
         domainMap[dId].push(s.score);
@@ -277,6 +268,7 @@ router.get("/reports/cross-company-radar", requireAuth, async (req: any, res): P
 
     series.push({
       label: company.name,
+      questionSetSignature: scoreContext.signature,
       scores: allDomains.map((d) => {
         const arr = domainMap[d.id];
         return arr && arr.length > 0

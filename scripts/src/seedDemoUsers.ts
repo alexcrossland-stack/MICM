@@ -4,7 +4,7 @@
  * Usage: pnpm --filter @workspace/scripts run seed-demo-users
  */
 
-import { db } from "@workspace/db";
+import { db, createQuestionSnapshot, attachQuestionReferences } from "@workspace/db";
 import {
   companiesTable,
   usersTable,
@@ -243,6 +243,8 @@ async function seed() {
     .returning();
   console.log(`  ✓  Created cycle: ${cycleDraft.name} (draft)`);
 
+  for (const cycle of [cycle2024, cycle2025, cycleDraft]) await createQuestionSnapshot(db, cycle.id);
+
   // 6. Assignees
   console.log(`\n── Assignees ──`);
   // Both company admin and user are assigned to the 2024 cycle (completed)
@@ -304,7 +306,7 @@ async function seed() {
       { assessmentId: cycle2024.id, userId: regularUser.id, criterionId: criterion.id, score: userScore, notes: null }
     );
   }
-  await db.insert(scoresTable).values(scoreInserts);
+  await db.insert(scoresTable).values(await attachQuestionReferences(db, scoreInserts));
   console.log(`  ✓  Inserted ${scoreInserts.length} scores for 2024 baseline`);
 
   // Partial scores for the active 2025 cycle (first 40% of criteria)
@@ -322,7 +324,7 @@ async function seed() {
       { assessmentId: cycle2025.id, userId: adminUser.id, criterionId: criterion.id, score: improvedScore, notes: null }
     );
   }
-  await db.insert(scoresTable).values(partial2025);
+  await db.insert(scoresTable).values(await attachQuestionReferences(db, partial2025));
   console.log(`  ✓  Inserted ${partial2025.length} partial scores for 2025 Q1 (in progress)`);
 
   // 8. Actions

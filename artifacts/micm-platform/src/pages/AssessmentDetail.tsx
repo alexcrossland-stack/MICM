@@ -8,7 +8,7 @@ import {
   useAssignAssessment,
   useListCompanyUsers,
   useGetRadarData,
-  useListDomains,
+  useGetAssessmentQuestions,
   useListScores,
   useListCriterionNotes,
   useCreateCriterionNote,
@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Users, CheckCircle2, ChevronLeft, Play, MessageSquare, Plus, Loader2, AlertCircle } from "lucide-react";
 import { ScoreGuide } from "@/components/ScoreGuide";
+import { assessmentQuestionDomains, assessmentQuestionLabel } from "@/lib/assessmentQuestions";
 
 const RADAR_COLORS = ["#6b8ef5", "#f5a97c", "#9cf5a4", "#f5e97c", "#c47cf5", "#7cf5e5"];
 
@@ -103,7 +104,7 @@ function buildMissingScoreSections(
   const scoresByUserId = new Map<number, Set<number>>();
   for (const score of scores ?? []) {
     const userScores = scoresByUserId.get(score.userId) ?? new Set<number>();
-    userScores.add(score.criterionId);
+    if (score.assessmentQuestionId != null) userScores.add(score.assessmentQuestionId);
     scoresByUserId.set(score.userId, userScores);
   }
 
@@ -148,7 +149,6 @@ export default function AssessmentDetailPage() {
   const [apiMissingScoreSections, setApiMissingScoreSections] = useState<MissingScoreSection[]>([]);
 
   const { data: assessment, isLoading } = useGetAssessment(id);
-  const { data: results } = useGetAssessmentResults(id);
   const { data: radarData } = useGetRadarData({ assessmentId: id });
   const assessmentCompanyId = assessment?.companyId ?? companyId ?? 0;
   const { data: users } = useListCompanyUsers(assessmentCompanyId, { query: { enabled: !!assessmentCompanyId } as any });
@@ -157,7 +157,8 @@ export default function AssessmentDetailPage() {
   const canManage = isCompanyAdmin || isSuperAdmin;
   const isAssigned = userId != null && !!assessment?.assignedUserIds?.includes(userId);
   const canUseEvidenceNotes = canManage || isAssigned;
-  const { data: domains, isLoading: domainsLoading } = useListDomains({
+  const { data: results } = useGetAssessmentResults(id, { query: { enabled: !!assessment && canUseEvidenceNotes } as any });
+  const { data: questionSet, isLoading: domainsLoading } = useGetAssessmentQuestions(id, undefined, {
     query: { enabled: canUseEvidenceNotes } as any,
   });
   const { data: scores, isLoading: scoresLoading } = useListScores(
@@ -173,6 +174,9 @@ export default function AssessmentDetailPage() {
     { query: { enabled: !!id && canUseEvidenceNotes } as any },
   );
   const { mutateAsync: createCriterionNote, isPending: creatingNote } = useCreateCriterionNote();
+  const domains = questionSet ? assessmentQuestionDomains(questionSet.questions) : undefined;
+
+  useEffect(() => { setSelectedCriterionId(""); setNoteText(""); setNoteStatus(null); }, [id, questionSet?.version]);
 
   useEffect(() => {
     if (!selectedCriterionId) return;
@@ -207,12 +211,12 @@ export default function AssessmentDetailPage() {
     ? buildMissingScoreSections(assessment.assignedUserIds, displayUsers, domains, scores)
     : [];
   const displayedMissingScoreSections = apiMissingScoreSections.length > 0 ? apiMissingScoreSections : missingScoreSections;
-  const canMarkComplete = !scoresLoading && !domainsLoading && displayedMissingScoreSections.length === 0;
+  const canMarkComplete = !!questionSet?.includedCount && !scoresLoading && !domainsLoading && displayedMissingScoreSections.length === 0;
   const assignableUsers = getAssignableAssessmentUsers(users);
 
   const radarChartData = radarData ? radarData.domains.map((name: string, i: number) => {
     const point: any = { domain: name };
-    radarData.series.forEach((s: any) => { point[s.label] = s.scores[i] ?? 0; });
+    radarData.series.forEach((s: any) => { point[s.label] = s.scores[i] ?? null; });
     return point;
   }) : [];
 
@@ -225,7 +229,7 @@ export default function AssessmentDetailPage() {
     }
     setStatusUpdating(true);
     try {
-      await updateAssessment({ id, data: { status } });
+      await updateAssessment({ id, data: { status: status as "draft" | "active" | "completed", expectedQuestionsVersion: questionSet?.version } });
       qc.invalidateQueries();
       toast({ title: `Assessment ${status}` });
     } catch (e: any) {
@@ -262,8 +266,8 @@ export default function AssessmentDetailPage() {
     }
     setNoteStatus(null);
     try {
-      const savedNote = await createCriterionNote({ data: { assessmentId: id, criterionId, note } });
-      if (savedNote.criterionId !== criterionId) {
+      const savedNote = await createCriterionNote({ data: { assessmentId: id, assessmentQuestionId: criterionId, questionsVersion: questionSet?.version, note } });
+      if (savedNote.assessmentQuestionId !== criterionId) {
         throw new Error("Evidence note was saved against a different criterion. Refresh and try again.");
       }
       setNoteText("");
@@ -307,6 +311,7 @@ export default function AssessmentDetailPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {isSuperAdmin && <Link href={`/assessments/${id}/questions`}><Button variant="outline" size="sm">Manage questions</Button></Link>}
         {canManage && assessment.status === "draft" && (
           <Button size="sm" onClick={() => handleStatusChange("active")} disabled={statusUpdating} className="gap-2">
             <Play className="w-3.5 h-3.5" />Activate
@@ -487,7 +492,7 @@ export default function AssessmentDetailPage() {
             {sortedCriterionNotes.length > 0 && (
               <div className="space-y-2">
                 {sortedCriterionNotes.map((note: CriterionNote) => {
-                  const criterion = criterionById.get(note.criterionId);
+                  const criterion = criterionById.get(note.assessmentQuestionId ?? 0);
                   return (
                     <div key={note.id} className="rounded-md border border-border bg-muted/30 p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -519,7 +524,7 @@ export default function AssessmentDetailPage() {
                   <option value="">Select criterion</option>
                   {criterionOptions.map((criterion) => (
                     <option key={criterion.id} value={String(criterion.id)}>
-                      {criterion.domainName} / {criterion.categoryName} / {criterion.name}
+                      {assessmentQuestionLabel(criterion, criterionOptions)}
                     </option>
                   ))}
                 </select>

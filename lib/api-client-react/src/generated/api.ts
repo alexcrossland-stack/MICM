@@ -21,6 +21,7 @@ import type {
   Action,
   ActionsSummary,
   AssessmentCycle,
+  AssessmentQuestionSet,
   AssessmentResults,
   AssignAssessmentBody,
   AuditLog,
@@ -31,15 +32,18 @@ import type {
   CompanyReport,
   CreateActionBody,
   CreateAssessmentBody,
+  CreateAssessmentRevisionBody,
   CreateCompanyBody,
   CreateCriterionNoteBody,
   CreateInvitationBody,
   CriterionNote,
   Domain,
   GetActionsSummaryParams,
+  GetAssessmentQuestionsParams,
   GetCompanyReportExportParams,
   GetCompanyReportParams,
   GetCrossCompanyRadarParams,
+  GetProgrammeIntelligenceParams,
   GetProgressOverTimeParams,
   GetRadarDataParams,
   HealthStatus,
@@ -57,6 +61,7 @@ import type {
   ProgrammeIntelligenceReport,
   ProgressData,
   RadarData,
+  SaveAssessmentQuestionsBody,
   Score,
   SubmitScoresBody,
   SuperAdminReport,
@@ -1933,6 +1938,302 @@ export const useUpdateAssessment = <
   TContext
 > => {
   return useMutation(getUpdateAssessmentMutationOptions(options));
+};
+
+/**
+ * @summary Read the saved question set for an authorized assessment
+ */
+export const getGetAssessmentQuestionsUrl = (
+  id: number,
+  params?: GetAssessmentQuestionsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/assessments/${id}/questions?${stringifiedParams}`
+    : `/api/assessments/${id}/questions`;
+};
+
+export const getAssessmentQuestions = async (
+  id: number,
+  params?: GetAssessmentQuestionsParams,
+  options?: RequestInit,
+): Promise<AssessmentQuestionSet> => {
+  return customFetch<AssessmentQuestionSet>(
+    getGetAssessmentQuestionsUrl(id, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAssessmentQuestionsQueryKey = (
+  id: number,
+  params?: GetAssessmentQuestionsParams,
+) => {
+  return [
+    `/api/assessments/${id}/questions`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetAssessmentQuestionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAssessmentQuestions>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params?: GetAssessmentQuestionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAssessmentQuestions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAssessmentQuestionsQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAssessmentQuestions>>
+  > = ({ signal }) =>
+    getAssessmentQuestions(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAssessmentQuestions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAssessmentQuestionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAssessmentQuestions>>
+>;
+export type GetAssessmentQuestionsQueryError = ErrorType<void>;
+
+/**
+ * @summary Read the saved question set for an authorized assessment
+ */
+
+export function useGetAssessmentQuestions<
+  TData = Awaited<ReturnType<typeof getAssessmentQuestions>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params?: GetAssessmentQuestionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAssessmentQuestions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAssessmentQuestionsQueryOptions(
+    id,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Super Admin atomic draft question edit; omitted existing IDs are rejected
+ */
+export const getSaveAssessmentQuestionsUrl = (id: number) => {
+  return `/api/assessments/${id}/questions`;
+};
+
+export const saveAssessmentQuestions = async (
+  id: number,
+  saveAssessmentQuestionsBody: SaveAssessmentQuestionsBody,
+  options?: RequestInit,
+): Promise<AssessmentQuestionSet> => {
+  return customFetch<AssessmentQuestionSet>(getSaveAssessmentQuestionsUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(saveAssessmentQuestionsBody),
+  });
+};
+
+export const getSaveAssessmentQuestionsMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveAssessmentQuestions>>,
+    TError,
+    { id: number; data: BodyType<SaveAssessmentQuestionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveAssessmentQuestions>>,
+  TError,
+  { id: number; data: BodyType<SaveAssessmentQuestionsBody> },
+  TContext
+> => {
+  const mutationKey = ["saveAssessmentQuestions"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveAssessmentQuestions>>,
+    { id: number; data: BodyType<SaveAssessmentQuestionsBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return saveAssessmentQuestions(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveAssessmentQuestionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveAssessmentQuestions>>
+>;
+export type SaveAssessmentQuestionsMutationBody =
+  BodyType<SaveAssessmentQuestionsBody>;
+export type SaveAssessmentQuestionsMutationError = ErrorType<void>;
+
+/**
+ * @summary Super Admin atomic draft question edit; omitted existing IDs are rejected
+ */
+export const useSaveAssessmentQuestions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveAssessmentQuestions>>,
+    TError,
+    { id: number; data: BodyType<SaveAssessmentQuestionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveAssessmentQuestions>>,
+  TError,
+  { id: number; data: BodyType<SaveAssessmentQuestionsBody> },
+  TContext
+> => {
+  return useMutation(getSaveAssessmentQuestionsMutationOptions(options));
+};
+
+/**
+ * @summary Super Admin copies questions to an unanswered draft in the same company
+ */
+export const getCreateAssessmentRevisionUrl = (id: number) => {
+  return `/api/assessments/${id}/revisions`;
+};
+
+export const createAssessmentRevision = async (
+  id: number,
+  createAssessmentRevisionBody: CreateAssessmentRevisionBody,
+  options?: RequestInit,
+): Promise<AssessmentCycle> => {
+  return customFetch<AssessmentCycle>(getCreateAssessmentRevisionUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createAssessmentRevisionBody),
+  });
+};
+
+export const getCreateAssessmentRevisionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAssessmentRevision>>,
+    TError,
+    { id: number; data: BodyType<CreateAssessmentRevisionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createAssessmentRevision>>,
+  TError,
+  { id: number; data: BodyType<CreateAssessmentRevisionBody> },
+  TContext
+> => {
+  const mutationKey = ["createAssessmentRevision"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createAssessmentRevision>>,
+    { id: number; data: BodyType<CreateAssessmentRevisionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createAssessmentRevision(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateAssessmentRevisionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createAssessmentRevision>>
+>;
+export type CreateAssessmentRevisionMutationBody =
+  BodyType<CreateAssessmentRevisionBody>;
+export type CreateAssessmentRevisionMutationError = ErrorType<void>;
+
+/**
+ * @summary Super Admin copies questions to an unanswered draft in the same company
+ */
+export const useCreateAssessmentRevision = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createAssessmentRevision>>,
+    TError,
+    { id: number; data: BodyType<CreateAssessmentRevisionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createAssessmentRevision>>,
+  TError,
+  { id: number; data: BodyType<CreateAssessmentRevisionBody> },
+  TContext
+> => {
+  return useMutation(getCreateAssessmentRevisionMutationOptions(options));
 };
 
 /**
@@ -3886,15 +4187,30 @@ export const useUpsertTarget = <
 /**
  * @summary Programme Intelligence Dashboard data (Super Admin only)
  */
-export const getGetProgrammeIntelligenceUrl = () => {
-  return `/api/reports/programme`;
+export const getGetProgrammeIntelligenceUrl = (
+  params?: GetProgrammeIntelligenceParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/programme?${stringifiedParams}`
+    : `/api/reports/programme`;
 };
 
 export const getProgrammeIntelligence = async (
+  params?: GetProgrammeIntelligenceParams,
   options?: RequestInit,
 ): Promise<ProgrammeIntelligenceReport> => {
   return customFetch<ProgrammeIntelligenceReport>(
-    getGetProgrammeIntelligenceUrl(),
+    getGetProgrammeIntelligenceUrl(params),
     {
       ...options,
       method: "GET",
@@ -3902,29 +4218,35 @@ export const getProgrammeIntelligence = async (
   );
 };
 
-export const getGetProgrammeIntelligenceQueryKey = () => {
-  return [`/api/reports/programme`] as const;
+export const getGetProgrammeIntelligenceQueryKey = (
+  params?: GetProgrammeIntelligenceParams,
+) => {
+  return [`/api/reports/programme`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetProgrammeIntelligenceQueryOptions = <
   TData = Awaited<ReturnType<typeof getProgrammeIntelligence>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getProgrammeIntelligence>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: GetProgrammeIntelligenceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProgrammeIntelligence>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getGetProgrammeIntelligenceQueryKey();
+    queryOptions?.queryKey ?? getGetProgrammeIntelligenceQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getProgrammeIntelligence>>
-  > = ({ signal }) => getProgrammeIntelligence({ signal, ...requestOptions });
+  > = ({ signal }) =>
+    getProgrammeIntelligence(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getProgrammeIntelligence>>,
@@ -3945,15 +4267,18 @@ export type GetProgrammeIntelligenceQueryError = ErrorType<unknown>;
 export function useGetProgrammeIntelligence<
   TData = Awaited<ReturnType<typeof getProgrammeIntelligence>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getProgrammeIntelligence>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetProgrammeIntelligenceQueryOptions(options);
+>(
+  params?: GetProgrammeIntelligenceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProgrammeIntelligence>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProgrammeIntelligenceQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

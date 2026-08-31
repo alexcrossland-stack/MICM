@@ -110,7 +110,7 @@ cp .env.example .env
 # 3. Apply committed database migrations (creates all tables)
 pnpm --filter @workspace/db run migrate
 
-# 4. Seed the six MICM domains (idempotent — safe to re-run)
+# 4. Bootstrap the six MICM domains (empty catalogue only; refuses to overwrite)
 pnpm --filter @workspace/scripts run seed-domains
 
 # 5. (Optional) Seed demo users and sample data
@@ -178,11 +178,16 @@ DATABASE_URL=<target_url> pnpm --filter @workspace/db run migrate
 
 | Script | What it does | Idempotent? |
 |---|---|---|
-| `seed-domains` | Creates the 6 MICM domains, categories, and criteria | Yes |
+| `seed-domains` | Creates the 6 MICM domains, categories, and criteria in an empty catalogue only | Refuses non-empty catalogue |
 | `seed-demo-users` | Creates 3 Clerk dev users + DB records + sample company/assessment/scores | Yes (skips existing) |
 | `seed-staging-demo-data` | Creates fake DB-only staging/demo data across multiple companies, canonical demo account records, users, assessments, actions, targets, and evidence notes | Yes (replaces prior `MICM STAGING DEMO - ...` records) |
 
-Domain data is read-only at runtime — no UI exists to edit it. Re-run `seed-domains` if domain data is missing or after a schema wipe.
+The shared domain catalogue is read-only at runtime. Super Admins can customise
+questions on individual draft assessments without changing the catalogue or other
+assessments. See [Assessment Question Management](docs/ASSESSMENT_QUESTIONS.md)
+for the editor, permissions, migration cutover, testing and rollback requirements.
+`seed-domains` is bootstrap-only: it refuses any existing catalogue data and never
+deletes or overwrites questions. Do not use it to update an established environment.
 
 `seed-staging-demo-data` is for non-production validation only. It requires `ENABLE_STAGING_DEMO_SEED=true`, refuses to run when `NODE_ENV=production`, and refuses `DATABASE_URL` values containing `prod`, `production`, or `live`. It does not create Clerk users, passwords, secrets, or production identifiers. Run `seed-domains` first, then:
 

@@ -463,6 +463,77 @@ paths:
               schema:
                 $ref: "#/components/schemas/AssessmentCycle"
 
+  /assessments/{id}/questions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      operationId: getAssessmentQuestions
+      tags: [assessments]
+      summary: Read the saved question set for an authorized assessment
+      parameters:
+        - name: includeRemoved
+          in: query
+          schema: { type: string, enum: ["true", "false"] }
+      responses:
+        "200":
+          description: Assessment questions; removed rows visible only to Super Admins
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentQuestionSet" }
+        "403": { description: Forbidden }
+        "404": { description: Assessment not found }
+    put:
+      operationId: saveAssessmentQuestions
+      tags: [assessments]
+      summary: Super Admin atomic draft question edit; omitted existing IDs are rejected
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveAssessmentQuestionsBody" }
+      responses:
+        "200":
+          description: Saved question set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentQuestionSet" }
+        "400": { description: Invalid questions }
+        "403": { description: Super Admin required }
+        "409": { description: Questions locked or version conflict }
+
+  /assessments/{id}/revisions:
+    post:
+      operationId: createAssessmentRevision
+      tags: [assessments]
+      summary: Super Admin copies questions to an unanswered draft in the same company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 500 }
+                expectedQuestionsVersion: { type: integer, minimum: 1 }
+              required: [name, expectedQuestionsVersion]
+      responses:
+        "201":
+          description: Revised draft with no copied answers or assignments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentCycle" }
+        "403": { description: Super Admin required }
+        "409": { description: Version conflict }
+
   /assessments/{id}/assign:
     post:
       operationId: assignAssessment
@@ -569,6 +640,9 @@ paths:
           required: false
           schema:
             type: ["integer", "null"]
+        - name: assessmentQuestionId
+          in: query
+          schema: { type: integer, minimum: 1 }
       responses:
         "200":
           description: Criterion notes
@@ -946,6 +1020,10 @@ paths:
       operationId: getProgrammeIntelligence
       tags: [reports]
       summary: Programme Intelligence Dashboard data (Super Admin only)
+      parameters:
+        - name: questionSetSignature
+          in: query
+          schema: { type: string, pattern: "^[a-f0-9]{64}$" }
       responses:
         "200":
           description: Programme intelligence report
@@ -1457,6 +1535,7 @@ components:
     AssessmentCycle:
       type: object
       properties:
+        questionsVersion: { type: integer, minimum: 1 }
         id:
           type: integer
         companyId:
@@ -1496,6 +1575,7 @@ components:
 
     CreateAssessmentBody:
       type: object
+      additionalProperties: false
       properties:
         companyId:
           type: integer
@@ -1513,13 +1593,16 @@ components:
 
     UpdateAssessmentBody:
       type: object
+      additionalProperties: false
       properties:
+        expectedQuestionsVersion: { type: integer, minimum: 1 }
         name:
           type: ["string", "null"]
         description:
           type: ["string", "null"]
         status:
           type: ["string", "null"]
+          enum: [draft, active, completed, null]
         startDate:
           type: ["string", "null"]
         endDate:
@@ -1538,6 +1621,8 @@ components:
     AssessmentResults:
       type: object
       properties:
+        questionSet:
+          $ref: "#/components/schemas/AssessmentQuestionSet"
         assessmentId:
           type: integer
         assessmentName:
@@ -1608,7 +1693,8 @@ components:
         userId:
           type: integer
         criterionId:
-          type: integer
+          type: ["integer", "null"]
+        assessmentQuestionId: { type: integer }
         score:
           type: integer
           minimum: 0
@@ -1630,7 +1716,9 @@ components:
 
     SubmitScoresBody:
       type: object
+      additionalProperties: false
       properties:
+        questionsVersion: { type: integer, minimum: 1 }
         assessmentId:
           type: integer
         scores:
@@ -1643,9 +1731,12 @@ components:
 
     ScoreInput:
       type: object
+      additionalProperties: false
       properties:
         criterionId:
           type: integer
+          description: Legacy catalogue identity; accepted only for an unchanged mapped question set
+        assessmentQuestionId: { type: integer, minimum: 1 }
         score:
           type: integer
           minimum: 0
@@ -1653,7 +1744,6 @@ components:
         notes:
           type: ["string", "null"]
       required:
-        - criterionId
         - score
 
     CriterionNote:
@@ -1666,7 +1756,11 @@ components:
         assessmentId:
           type: integer
         criterionId:
-          type: integer
+          type: ["integer", "null"]
+        assessmentQuestionId: { type: integer }
+        questionName: { type: string }
+        domainName: { type: string }
+        categoryName: { type: string }
         authorUserId:
           type: integer
         authorName:
@@ -1692,7 +1786,10 @@ components:
 
     CreateCriterionNoteBody:
       type: object
+      additionalProperties: false
       properties:
+        questionsVersion: { type: integer, minimum: 1 }
+        assessmentQuestionId: { type: integer, minimum: 1 }
         assessmentId:
           type: integer
         criterionId:
@@ -1702,7 +1799,6 @@ components:
           minLength: 1
       required:
         - assessmentId
-        - criterionId
         - note
 
     RadarData:
@@ -1723,6 +1819,7 @@ components:
     RadarSeries:
       type: object
       properties:
+        questionSetSignature: { type: string }
         label:
           type: string
         scores:
@@ -1748,6 +1845,7 @@ components:
     CycleProgress:
       type: object
       properties:
+        questionSetSignature: { type: string }
         assessmentId:
           type: integer
         assessmentName:
@@ -1766,6 +1864,69 @@ components:
         - domainScores
 
     # ─── Domain / Criteria ───────────────────────────────────────────────────────
+
+    AssessmentQuestionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: integer, minimum: 1 }
+        categoryId: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: ["string", "null"], maxLength: 5000 }
+        baselineDescription: { type: ["string", "null"], maxLength: 5000 }
+        excellenceDescription: { type: ["string", "null"], maxLength: 5000 }
+        orderIndex: { type: integer, minimum: 0, maximum: 1000 }
+        isIncluded: { type: boolean }
+      required: [categoryId, name, orderIndex, isIncluded]
+
+    AssessmentQuestion:
+      type: object
+      properties:
+        id: { type: integer }
+        assessmentId: { type: integer }
+        sourceCriterionId: { type: ["integer", "null"] }
+        categoryId: { type: integer }
+        domainId: { type: integer }
+        domainName: { type: string }
+        domainDescription: { type: ["string", "null"] }
+        domainOrder: { type: integer }
+        categoryName: { type: string }
+        categoryOrder: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        baselineDescription: { type: ["string", "null"] }
+        excellenceDescription: { type: ["string", "null"] }
+        orderIndex: { type: integer }
+        isIncluded: { type: boolean }
+      required: [id, assessmentId, sourceCriterionId, categoryId, domainId, domainName, domainOrder, categoryName, categoryOrder, name, orderIndex, isIncluded]
+
+    AssessmentQuestionSet:
+      type: object
+      properties:
+        assessmentId: { type: integer }
+        companyId: { type: integer }
+        version: { type: integer }
+        signature: { type: string }
+        customised: { type: boolean }
+        canEdit: { type: boolean }
+        canReturnToDraft: { type: boolean }
+        lockReason: { type: ["string", "null"] }
+        includedCount: { type: integer }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/AssessmentQuestion" }
+      required: [assessmentId, companyId, version, signature, customised, canEdit, canReturnToDraft, lockReason, includedCount, questions]
+
+    SaveAssessmentQuestionsBody:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedQuestionsVersion: { type: integer, minimum: 1 }
+        questions:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/AssessmentQuestionInput" }
+      required: [expectedQuestionsVersion, questions]
 
     Domain:
       type: object
@@ -2234,6 +2395,17 @@ components:
     ProgrammeIntelligenceReport:
       type: object
       properties:
+        selectedQuestionSetSignature: { type: ["string", "null"] }
+        questionSetCohorts:
+          type: array
+          items:
+            type: object
+            properties:
+              signature: { type: string }
+              questionCount: { type: integer }
+              companiesScored: { type: integer }
+            required: [signature, questionCount, companiesScored]
+        comparisonNotice: { type: string }
         kpis:
           $ref: "#/components/schemas/ProgrammeKPIs"
         heatmap:

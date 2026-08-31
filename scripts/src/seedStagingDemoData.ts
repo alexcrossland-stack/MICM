@@ -84,6 +84,7 @@ function criterionIdsForDomain(
 async function deleteExistingDemoData(dbm: DbModule) {
   const {
     db,
+    assessmentQuestionsTable,
     companiesTable,
     usersTable,
     assessmentCyclesTable,
@@ -125,6 +126,7 @@ async function deleteExistingDemoData(dbm: DbModule) {
       await db
         .delete(assessmentAssigneesTable)
         .where(inArray(assessmentAssigneesTable.assessmentId, cycleIds));
+      await db.delete(assessmentQuestionsTable).where(inArray(assessmentQuestionsTable.assessmentId, cycleIds));
       await db
         .delete(assessmentCyclesTable)
         .where(inArray(assessmentCyclesTable.id, cycleIds));
@@ -155,6 +157,8 @@ async function seed() {
   const dbm = await import("@workspace/db");
   const {
     db,
+    createQuestionSnapshot,
+    attachQuestionReferences,
     companiesTable,
     usersTable,
     assessmentCyclesTable,
@@ -301,6 +305,7 @@ async function seed() {
         },
       ])
       .returning();
+    for (const cycle of [baseline, latest, active, draft]) await createQuestionSnapshot(db, cycle.id);
     cyclesByCompanyKey.set(companyData.key, {
       baseline,
       latest,
@@ -366,10 +371,10 @@ async function seed() {
         },
       );
     }
-    await db.insert(scoresTable).values(completedScores);
+    await db.insert(scoresTable).values(await attachQuestionReferences(db, completedScores));
 
     const activePartialCount = Math.max(2, Math.floor(criteria.length * 0.45));
-    await db.insert(scoresTable).values(
+    await db.insert(scoresTable).values(await attachQuestionReferences(db,
       criteria
         .slice(0, activePartialCount)
         .flatMap((criterion, criterionIndex) => [
@@ -392,7 +397,7 @@ async function seed() {
               ]
             : []),
         ]),
-    );
+    ));
   }
 
   const strategyCriterionIds = criterionIdsForDomain(
@@ -419,7 +424,7 @@ async function seed() {
     const users = usersByCompanyKey.get(companyData.key)!;
     const cycles = cyclesByCompanyKey.get(companyData.key)!;
 
-    await db.insert(criterionNotesTable).values([
+    await db.insert(criterionNotesTable).values(await attachQuestionReferences(db, [
       {
         companyId: company.id,
         assessmentId: cycles.latest.id,
@@ -441,7 +446,7 @@ async function seed() {
         authorUserId: users.userB.id,
         note: "Fake active-review note: staged ERP process evidence is incomplete.",
       },
-    ]);
+    ]));
 
     const strategyDomain = domains.find((domain) => domain.name === "Strategy");
     const dailyDomain = domains.find(

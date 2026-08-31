@@ -10,6 +10,13 @@ export type ReportComposition = {
   template: ReportTemplate;
   templateLabel: string;
   audience: ReportAudience;
+  questionSet: {
+    version: number;
+    signature: string;
+    customised: boolean;
+    includedCount: number;
+    questions: Array<{ id: number; domainName: string; categoryName: string; name: string; description?: string | null; baselineDescription?: string | null; excellenceDescription?: string | null }>;
+  } | null;
   coverSummary: {
     companyId: number;
     companyName: string;
@@ -68,6 +75,7 @@ export type ReportComposition = {
       note: string;
       authorName: string;
       createdAt: string;
+      questionLabel: string;
     }>;
   };
   benchmarking: {
@@ -102,6 +110,7 @@ export function composeCompanyReport(
       note: note.note,
       authorName: note.authorName,
       createdAt: formatDate(note.createdAt),
+      questionLabel: [note.domainName, note.categoryName, note.questionName].filter(Boolean).join(" / ") || `Criterion ${note.criterionId}`,
     }));
   const priorityActions = report.actions
     .filter((action) => action.status !== "completed")
@@ -118,6 +127,10 @@ export function composeCompanyReport(
     template,
     templateLabel: templateLabel(template),
     audience,
+    questionSet: report.latestResults?.questionSet ? {
+      ...report.latestResults.questionSet,
+      questions: template === "operational_detail" ? report.latestResults.questionSet.questions.filter(q => q.isIncluded) : [],
+    } : null,
     coverSummary: {
       companyId: report.company.id,
       companyName: report.company.name,
@@ -137,7 +150,10 @@ export function composeCompanyReport(
     },
     executiveSummary: {
       headline: buildHeadline(report.company.name, latestOverallScore, openActions),
-      bullets: buildExecutiveBullets(completedAssessments, latestOverallScore, openActions, evidenceNotes, currentChallenges.length, template),
+      bullets: [
+        ...buildExecutiveBullets(completedAssessments, latestOverallScore, openActions, evidenceNotes, currentChallenges.length, template),
+        ...(report.latestResults?.questionSet ? [`Question set v${report.latestResults.questionSet.version}: ${report.latestResults.questionSet.includedCount} included questions. ${report.latestResults.questionSet.customised ? "Customised for this assessment; compare only with identical question sets." : "Saved assessment questionnaire."}`] : []),
+      ],
     },
     maturityOverview: {
       overallScore: latestOverallScore,

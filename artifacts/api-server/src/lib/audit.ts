@@ -1,4 +1,4 @@
-import { db, auditLogsTable, usersTable } from "@workspace/db";
+import { db, auditLogsTable, usersTable, type QuestionDatabase } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 type AuditActor = {
@@ -51,10 +51,10 @@ async function getAuditActor(req: any, currentUser?: AuditActor | null): Promise
   return actor ?? { clerkUserId: req.clerkUserId };
 }
 
-export async function recordAuditEvent(req: any, input: AuditEventInput): Promise<void> {
+export async function recordAuditEvent(req: any, input: AuditEventInput, transaction?: QuestionDatabase): Promise<void> {
   try {
     const actor = await getAuditActor(req, input.currentUser);
-    await db.insert(auditLogsTable).values({
+    await (transaction ?? db).insert(auditLogsTable).values({
       actorUserId: actor?.id ?? null,
       actorClerkUserId: actor?.clerkUserId ?? req.clerkUserId ?? null,
       actorRole: actor?.role ?? null,
@@ -65,6 +65,7 @@ export async function recordAuditEvent(req: any, input: AuditEventInput): Promis
       metadata: sanitizeAuditMetadata(input.metadata ?? {}) as Record<string, unknown>,
     });
   } catch (err) {
+    if (transaction) throw err;
     req.log?.error({ err, eventType: input.eventType }, "Failed to record audit event");
   }
 }
