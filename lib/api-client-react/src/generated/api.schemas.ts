@@ -356,6 +356,8 @@ export const AssessmentCycleStatus = {
 } as const;
 
 export interface AssessmentCycle {
+  /** @minimum 1 */
+  questionsVersion?: number;
   id: number;
   companyId: number;
   name: string;
@@ -383,13 +385,28 @@ export interface CreateAssessmentBody {
   endDate?: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type UpdateAssessmentBodyStatus =
+  | (typeof UpdateAssessmentBodyStatus)[keyof typeof UpdateAssessmentBodyStatus]
+  | null;
+
+export const UpdateAssessmentBodyStatus = {
+  draft: "draft",
+  active: "active",
+  completed: "completed",
+} as const;
+
 export interface UpdateAssessmentBody {
+  /** @minimum 1 */
+  expectedQuestionsVersion?: number;
   /** @nullable */
   name?: string | null;
   /** @nullable */
   description?: string | null;
   /** @nullable */
-  status?: string | null;
+  status?: UpdateAssessmentBodyStatus;
   /** @nullable */
   startDate?: string | null;
   /** @nullable */
@@ -398,6 +415,44 @@ export interface UpdateAssessmentBody {
 
 export interface AssignAssessmentBody {
   userIds: number[];
+}
+
+export interface AssessmentQuestion {
+  id: number;
+  assessmentId: number;
+  /** @nullable */
+  sourceCriterionId: number | null;
+  categoryId: number;
+  domainId: number;
+  domainName: string;
+  /** @nullable */
+  domainDescription?: string | null;
+  domainOrder: number;
+  categoryName: string;
+  categoryOrder: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  baselineDescription?: string | null;
+  /** @nullable */
+  excellenceDescription?: string | null;
+  orderIndex: number;
+  isIncluded: boolean;
+}
+
+export interface AssessmentQuestionSet {
+  assessmentId: number;
+  companyId: number;
+  version: number;
+  signature: string;
+  customised: boolean;
+  canEdit: boolean;
+  canReturnToDraft: boolean;
+  /** @nullable */
+  lockReason: string | null;
+  includedCount: number;
+  questions: AssessmentQuestion[];
 }
 
 export interface DomainScore {
@@ -423,7 +478,12 @@ export interface CriterionNote {
   id: number;
   companyId: number;
   assessmentId: number;
-  criterionId: number;
+  /** @nullable */
+  criterionId: number | null;
+  assessmentQuestionId?: number;
+  questionName?: string;
+  domainName?: string;
+  categoryName?: string;
   authorUserId: number;
   authorName: string;
   note: string;
@@ -432,6 +492,7 @@ export interface CriterionNote {
 }
 
 export interface AssessmentResults {
+  questionSet?: AssessmentQuestionSet;
   assessmentId: number;
   assessmentName: string;
   userScores: UserScoreSet[];
@@ -443,7 +504,9 @@ export interface Score {
   id: number;
   assessmentId: number;
   userId: number;
-  criterionId: number;
+  /** @nullable */
+  criterionId: number | null;
+  assessmentQuestionId?: number;
   /**
    * @minimum 0
    * @maximum 4
@@ -456,7 +519,10 @@ export interface Score {
 }
 
 export interface ScoreInput {
-  criterionId: number;
+  /** Legacy catalogue identity; accepted only for an unchanged mapped question set */
+  criterionId?: number;
+  /** @minimum 1 */
+  assessmentQuestionId?: number;
   /**
    * @minimum 0
    * @maximum 4
@@ -467,18 +533,25 @@ export interface ScoreInput {
 }
 
 export interface SubmitScoresBody {
+  /** @minimum 1 */
+  questionsVersion?: number;
   assessmentId: number;
   scores: ScoreInput[];
 }
 
 export interface CreateCriterionNoteBody {
+  /** @minimum 1 */
+  questionsVersion?: number;
+  /** @minimum 1 */
+  assessmentQuestionId?: number;
   assessmentId: number;
-  criterionId: number;
+  criterionId?: number;
   /** @minLength 1 */
   note: string;
 }
 
 export interface RadarSeries {
+  questionSetSignature?: string;
   label: string;
   scores: (number | null)[];
   /** @nullable */
@@ -491,6 +564,7 @@ export interface RadarData {
 }
 
 export interface CycleProgress {
+  questionSetSignature?: string;
   assessmentId: number;
   assessmentName: string;
   /** @nullable */
@@ -502,6 +576,46 @@ export interface CycleProgress {
 
 export interface ProgressData {
   cycles: CycleProgress[];
+}
+
+export interface AssessmentQuestionInput {
+  /** @minimum 1 */
+  id?: number;
+  /** @minimum 1 */
+  categoryId: number;
+  /**
+   * @minLength 1
+   * @maxLength 500
+   */
+  name: string;
+  /**
+   * @maxLength 5000
+   * @nullable
+   */
+  description?: string | null;
+  /**
+   * @maxLength 5000
+   * @nullable
+   */
+  baselineDescription?: string | null;
+  /**
+   * @maxLength 5000
+   * @nullable
+   */
+  excellenceDescription?: string | null;
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  orderIndex: number;
+  isIncluded: boolean;
+}
+
+export interface SaveAssessmentQuestionsBody {
+  /** @minimum 1 */
+  expectedQuestionsVersion: number;
+  /** @maxItems 500 */
+  questions: AssessmentQuestionInput[];
 }
 
 export interface Criterion {
@@ -755,7 +869,17 @@ export interface RiskCompany {
   detail: string;
 }
 
+export type ProgrammeIntelligenceReportQuestionSetCohortsItem = {
+  signature: string;
+  questionCount: number;
+  companiesScored: number;
+};
+
 export interface ProgrammeIntelligenceReport {
+  /** @nullable */
+  selectedQuestionSetSignature?: string | null;
+  questionSetCohorts?: ProgrammeIntelligenceReportQuestionSetCohortsItem[];
+  comparisonNotice?: string;
   kpis: ProgrammeKPIs;
   heatmap: CompanyHeatmapRow[];
   domainBenchmarks: DomainBenchmark[];
@@ -809,6 +933,28 @@ export type ListAssessmentsParams = {
   companyId?: number | null;
 };
 
+export type GetAssessmentQuestionsParams = {
+  includeRemoved?: GetAssessmentQuestionsIncludeRemoved;
+};
+
+export type GetAssessmentQuestionsIncludeRemoved =
+  (typeof GetAssessmentQuestionsIncludeRemoved)[keyof typeof GetAssessmentQuestionsIncludeRemoved];
+
+export const GetAssessmentQuestionsIncludeRemoved = {
+  true: "true",
+  false: "false",
+} as const;
+
+export type CreateAssessmentRevisionBody = {
+  /**
+   * @minLength 1
+   * @maxLength 500
+   */
+  name: string;
+  /** @minimum 1 */
+  expectedQuestionsVersion: number;
+};
+
 export type ListScoresParams = {
   assessmentId: number;
   /**
@@ -823,6 +969,10 @@ export type ListCriterionNotesParams = {
    * @nullable
    */
   criterionId?: number | null;
+  /**
+   * @minimum 1
+   */
+  assessmentQuestionId?: number;
 };
 
 export type GetRadarDataParams = {
@@ -905,6 +1055,13 @@ export type GetCrossCompanyRadarParams = {
 
 export type ListTargetsParams = {
   companyId?: number;
+};
+
+export type GetProgrammeIntelligenceParams = {
+  /**
+   * @pattern ^[a-f0-9]{64}$
+   */
+  questionSetSignature?: string;
 };
 
 export type ListAuditLogsParams = {

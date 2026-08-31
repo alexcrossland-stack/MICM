@@ -247,15 +247,16 @@ export function OverlayRadarAndTable({
   }
 
   const chartData = radarData.domains.map((domain, i) => {
-    const point: Record<string, string | number> = { domain };
+    const point: Record<string, string | number | null> = { domain };
     for (const s of radarData.series) {
-      point[s.label] = s.scores[i] ?? 0;
+      point[s.label] = s.scores[i] ?? null;
     }
     return point;
   });
 
   return (
     <div className="grid lg:grid-cols-2 gap-6">
+      {differentQuestionSets(radarData.series) && <p role="status" className="lg:col-span-2 text-sm text-amber-700">These assessments use different question sets. Scores are shown separately and are not a like-for-like comparison.</p>}
       <ResponsiveContainer width="100%" height={chartHeight}>
         <RadarChart data={chartData}>
           <PolarGrid stroke="hsl(var(--border))" />
@@ -320,3 +321,4 @@ export function OverlayRadarAndTable({
     </div>
   );
 }
+import { differentQuestionSets } from "@/lib/assessmentQuestions";

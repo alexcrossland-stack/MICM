@@ -146,7 +146,11 @@ function ProgrammeFilter({
 
 export default function ProgrammePage() {
   const { isSuperAdmin } = useCurrentUser();
-  const { data, isLoading } = useGetProgrammeIntelligence({ query: { enabled: isSuperAdmin } as any });
+  const [questionSetFilter, setQuestionSetFilter] = useState("");
+  const { data, isLoading } = useGetProgrammeIntelligence(
+    { questionSetSignature: questionSetFilter || undefined },
+    { query: { enabled: isSuperAdmin } as any },
+  );
   const [sectorFilter, setSectorFilter] = useState("all");
   const [sizeFilter, setSizeFilter] = useState("all");
   const [dateRangeFilter, setDateRangeFilter] = useState<ProgrammeDateRange>("all");
@@ -229,6 +233,13 @@ export default function ProgrammePage() {
         </div>
       </div>
 
+      {(data.questionSetCohorts?.length ?? 0) > 1 && <div className="space-y-2">
+        <label htmlFor="question-set-filter" className="text-sm font-medium">Comparable question set</label>
+        <select id="question-set-filter" className="block w-full max-w-lg rounded-md border bg-background p-2 text-sm" value={questionSetFilter || data.selectedQuestionSetSignature || ""} onChange={event => setQuestionSetFilter(event.target.value)}>
+          {data.questionSetCohorts?.map(cohort => <option key={cohort.signature} value={cohort.signature}>{cohort.signature.slice(0, 8)}: {cohort.questionCount} questions, {cohort.companiesScored} companies</option>)}
+        </select>
+        <p role="status" className="text-sm text-muted-foreground">{data.comparisonNotice}</p>
+      </div>}
       <Card className="border-card-border">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Programme Filters</CardTitle>

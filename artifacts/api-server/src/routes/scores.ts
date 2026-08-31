@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, loadAssessmentQuestions, questionSetSignature } from "@workspace/db";
 import { usersTable, scoresTable, assessmentCyclesTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import {
@@ -13,6 +13,7 @@ import {
   GetProgressOverTimeQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "./auth";
+import { authorizeQuestions, checkQuestionsVersion, QuestionError, questionScoreContext, questionRoute, resolveQuestion } from "../lib/assessmentQuestions";
 
 const router: IRouter = Router();
 
@@ -22,6 +23,7 @@ function formatScore(s: any) {
     assessmentId: s.assessmentId,
     userId: s.userId,
     criterionId: s.criterionId,
+    assessmentQuestionId: s.assessmentQuestionId,
     score: s.score,
     notes: s.notes,
     createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
@@ -59,74 +61,70 @@ router.get("/scores", requireAuth, async (req: any, res): Promise<void> => {
 });
 
 // POST /scores
-router.post("/scores", requireAuth, async (req: any, res): Promise<void> => {
+router.post("/scores", requireAuth, questionRoute(async (req: any, res): Promise<void> => {
   const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, req.clerkUserId));
   if (!currentUser) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  const parsed = SubmitScoresBody.safeParse(req.body);
+  const parsed = SubmitScoresBody.strict().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { assessmentId, scores } = parsed.data;
 
-  const [cycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, assessmentId));
-  if (!cycle) { res.status(404).json({ error: "Assessment not found" }); return; }
-  if (currentUser.role !== "super_admin" && currentUser.companyId !== cycle.companyId) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  if (cycle.status !== "active") {
-    res.status(400).json({ error: "Assessment is not active" });
-    return;
-  }
-
-  let [assignee] = await db.select().from(assessmentAssigneesTable).where(
+  const results = await db.transaction(async tx => {
+  const [record] = await tx.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, assessmentId)).for("update");
+  const cycle = await authorizeQuestions(tx, record, currentUser, true);
+  if (cycle.status !== "active") throw new QuestionError(400, "Assessment is not active");
+  checkQuestionsVersion(cycle, parsed.data.questionsVersion);
+  const questions = await loadAssessmentQuestions(tx, assessmentId);
+  const resolved = scores.map(input => ({ input, question: resolveQuestion(questions, input) }));
+  if (new Set(resolved.map(item => item.question.id)).size !== resolved.length || scores.some(s => !Number.isInteger(s.score))) throw new QuestionError(400, "Submit one whole-number score from 0 to 4 per included question");
+  let [assignee] = await tx.select().from(assessmentAssigneesTable).where(
     and(eq(assessmentAssigneesTable.assessmentId, assessmentId), eq(assessmentAssigneesTable.userId, currentUser.id)),
   );
   if (!assignee) {
     if (currentUser.role !== "super_admin") {
-      res.status(403).json({ error: "Forbidden" });
-      return;
+      throw new QuestionError(403, "Forbidden");
     }
-    [assignee] = await db.insert(assessmentAssigneesTable).values({
+    [assignee] = await tx.insert(assessmentAssigneesTable).values({
       assessmentId,
       userId: currentUser.id,
     }).returning();
   }
 
   const results = [];
-  for (const scoreInput of scores) {
-    // Upsert: delete existing and re-insert
-    await db.delete(scoresTable).where(and(
-      eq(scoresTable.assessmentId, assessmentId),
-      eq(scoresTable.userId, currentUser.id),
-      eq(scoresTable.criterionId, scoreInput.criterionId)
-    ));
-    const [saved] = await db.insert(scoresTable).values({
+  for (const { input: scoreInput, question } of resolved) {
+    const [existing] = await tx.select().from(scoresTable).where(and(eq(scoresTable.assessmentId, assessmentId), eq(scoresTable.userId, currentUser.id), eq(scoresTable.assessmentQuestionId, question.id)));
+    const value = {
       assessmentId,
       userId: currentUser.id,
-      criterionId: scoreInput.criterionId,
+      criterionId: question.sourceCriterionId,
+      assessmentQuestionId: question.id,
       score: scoreInput.score,
       notes: scoreInput.notes,
-    }).returning();
+    };
+    const [saved] = existing
+      ? await tx.update(scoresTable).set(value).where(eq(scoresTable.id, existing.id)).returning()
+      : await tx.insert(scoresTable).values(value).returning();
     results.push(saved);
   }
 
   // Mark assignee as completed if all criteria scored
-  const allCriteria = await db.select().from(criteriaTable);
-  const allScores = await db.select().from(scoresTable).where(
+  const allCriteria = questions.filter(q => q.isIncluded);
+  const allScores = await tx.select().from(scoresTable).where(
     and(eq(scoresTable.assessmentId, assessmentId), eq(scoresTable.userId, currentUser.id))
   );
-  if (allScores.length >= allCriteria.length) {
-    await db.update(assessmentAssigneesTable)
+  if (allCriteria.length > 0 && allCriteria.every(q => allScores.some(s => s.assessmentQuestionId === q.id))) {
+    await tx.update(assessmentAssigneesTable)
       .set({ completedAt: new Date() })
       .where(and(
         eq(assessmentAssigneesTable.assessmentId, assessmentId),
         eq(assessmentAssigneesTable.userId, currentUser.id)
       ));
   }
-
+  return results;
+  });
   res.json(SubmitScoresResponse.parse(results.map(formatScore)));
-});
+}));
 
 // GET /scores/radar
 router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> => {
@@ -138,13 +136,6 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
 
   const assessmentId = queryParams.data.assessmentId;
   const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
-  const allCategories = await db.select().from(categoriesTable);
-  const allCriteria = await db.select().from(criteriaTable);
-
-  const criterionToDomainId: Record<number, number> = {};
-  const categoryToDomainId: Record<number, number> = {};
-  for (const cat of allCategories) categoryToDomainId[cat.id] = cat.domainId;
-  for (const crit of allCriteria) criterionToDomainId[crit.id] = categoryToDomainId[crit.categoryId];
 
   const COLORS = ["#7c9cf5", "#f5a97c", "#9cf5a4", "#f5e97c", "#c47cf5", "#7cf5e5"];
 
@@ -164,14 +155,16 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
     for (const [idx, cycleId] of allCycleIds.entries()) {
       const [cycle] = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.id, cycleId));
       if (!cycle || !canAccessCycle(cycle)) continue;
+      const scoreContext = await questionScoreContext(cycleId);
       const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, cycleId));
       const domainMap: Record<number, number[]> = {};
       for (const s of scores) {
-        const dId = criterionToDomainId[s.criterionId];
+        const dId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
         if (dId) { if (!domainMap[dId]) domainMap[dId] = []; domainMap[dId].push(s.score); }
       }
       series.push({
         label: cycle.name,
+        questionSetSignature: scoreContext.signature,
         scores: allDomains.map(d => {
           const arr = domainMap[d.id];
           return arr && arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 100) / 100 : null;
@@ -187,15 +180,17 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
       return;
     }
     const usersToShow = await db.select().from(usersTable).where(inArray(usersTable.id, requestedUserIds));
+    const scoreContext = await questionScoreContext(assessmentId);
     for (const [idx, u] of usersToShow.entries()) {
       const scores = await db.select().from(scoresTable).where(and(eq(scoresTable.assessmentId, assessmentId), eq(scoresTable.userId, u.id)));
       const domainMap: Record<number, number[]> = {};
       for (const s of scores) {
-        const dId = criterionToDomainId[s.criterionId];
+        const dId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
         if (dId) { if (!domainMap[dId]) domainMap[dId] = []; domainMap[dId].push(s.score); }
       }
       series.push({
         label: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+        questionSetSignature: scoreContext.signature,
         scores: allDomains.map(d => {
           const arr = domainMap[d.id];
           return arr && arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 100) / 100 : null;
@@ -210,14 +205,16 @@ router.get("/scores/radar", requireAuth, async (req: any, res): Promise<void> =>
       res.status(403).json({ error: "Forbidden" });
       return;
     }
+    const scoreContext = await questionScoreContext(assessmentId);
     const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, assessmentId));
     const domainMap: Record<number, number[]> = {};
     for (const s of scores) {
-      const dId = criterionToDomainId[s.criterionId];
+      const dId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
       if (dId) { if (!domainMap[dId]) domainMap[dId] = []; domainMap[dId].push(s.score); }
     }
     series.push({
       label: primaryCycle.name,
+      questionSetSignature: scoreContext.signature,
       scores: allDomains.map(d => {
         const arr = domainMap[d.id];
         return arr && arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 100) / 100 : null;
@@ -245,22 +242,14 @@ router.get("/scores/progress", requireAuth, async (req: any, res): Promise<void>
 
   const cycles = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, companyId)).orderBy(assessmentCyclesTable.createdAt);
   const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
-  const allCategories = await db.select().from(categoriesTable);
-  const allCriteria = await db.select().from(criteriaTable);
-
-  const criterionToDomainId: Record<number, number> = {};
-  for (const cat of allCategories) {
-    for (const crit of allCriteria) {
-      if (crit.categoryId === cat.id) criterionToDomainId[crit.id] = cat.domainId;
-    }
-  }
 
   const cycleProgressData = [];
   for (const cycle of cycles) {
+    const scoreContext = await questionScoreContext(cycle.id);
     const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, cycle.id));
     const domainMap: Record<number, number[]> = {};
     for (const s of scores) {
-      const dId = criterionToDomainId[s.criterionId];
+      const dId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
       if (dId) { if (!domainMap[dId]) domainMap[dId] = []; domainMap[dId].push(s.score); }
     }
     const domainScores = allDomains.map(d => {
@@ -278,6 +267,7 @@ router.get("/scores/progress", requireAuth, async (req: any, res): Promise<void>
     cycleProgressData.push({
       assessmentId: cycle.id,
       assessmentName: cycle.name,
+      questionSetSignature: scoreContext.signature,
       completedAt: cycle.updatedAt instanceof Date ? cycle.updatedAt.toISOString() : cycle.updatedAt,
       domainScores,
       overallScore,

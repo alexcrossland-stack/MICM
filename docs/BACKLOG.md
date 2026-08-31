@@ -113,6 +113,13 @@ Allow Company Admins to clone an existing assessment cycle to create a new one p
 ### #010 — Domain and criterion management (Super Admin)
 **Priority: Low**
 
+Assessment-specific question editing is assessed in
+[Super Admin Assessment Question Management](SUPER_ADMIN_QUESTION_MANAGEMENT_SPEC.md).
+Assessment-local editing is implemented locally, pending review and the required
+maintenance-window deployment. See [operator/contributor guide](ASSESSMENT_QUESTIONS.md)
+for snapshots, historical protection, migration gates and validation.
+Global catalogue editing and category management remain separate follow-up work.
+
 Domains and criteria are currently seeded once and read-only at runtime. Add a Super Admin UI to:
 - Edit criterion names, baseline descriptions, and excellence descriptions
 - Add or disable criteria without re-seeding

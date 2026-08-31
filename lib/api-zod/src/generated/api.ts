@@ -625,6 +625,7 @@ export const ListAssessmentsQueryParams = zod.object({
 });
 
 export const ListAssessmentsResponseItem = zod.object({
+  questionsVersion: zod.number().min(1).optional(),
   id: zod.number(),
   companyId: zod.number(),
   name: zod.string(),
@@ -658,6 +659,7 @@ export const GetAssessmentParams = zod.object({
 });
 
 export const GetAssessmentResponse = zod.object({
+  questionsVersion: zod.number().min(1).optional(),
   id: zod.number(),
   companyId: zod.number(),
   name: zod.string(),
@@ -679,14 +681,23 @@ export const UpdateAssessmentParams = zod.object({
 });
 
 export const UpdateAssessmentBody = zod.object({
+  expectedQuestionsVersion: zod.number().min(1).optional(),
   name: zod.string().nullish(),
   description: zod.string().nullish(),
-  status: zod.string().nullish(),
+  status: zod
+    .union([
+      zod.literal("draft"),
+      zod.literal("active"),
+      zod.literal("completed"),
+      zod.literal(null),
+    ])
+    .nullish(),
   startDate: zod.string().nullish(),
   endDate: zod.string().nullish(),
 });
 
 export const UpdateAssessmentResponse = zod.object({
+  questionsVersion: zod.number().min(1).optional(),
   id: zod.number(),
   companyId: zod.number(),
   name: zod.string(),
@@ -701,6 +712,151 @@ export const UpdateAssessmentResponse = zod.object({
 });
 
 /**
+ * @summary Read the saved question set for an authorized assessment
+ */
+
+export const GetAssessmentQuestionsParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const GetAssessmentQuestionsQueryParams = zod.object({
+  includeRemoved: zod.enum(["true", "false"]).optional(),
+});
+
+export const GetAssessmentQuestionsResponse = zod.object({
+  assessmentId: zod.number(),
+  companyId: zod.number(),
+  version: zod.number(),
+  signature: zod.string(),
+  customised: zod.boolean(),
+  canEdit: zod.boolean(),
+  canReturnToDraft: zod.boolean(),
+  lockReason: zod.string().nullable(),
+  includedCount: zod.number(),
+  questions: zod.array(
+    zod.object({
+      id: zod.number(),
+      assessmentId: zod.number(),
+      sourceCriterionId: zod.number().nullable(),
+      categoryId: zod.number(),
+      domainId: zod.number(),
+      domainName: zod.string(),
+      domainDescription: zod.string().nullish(),
+      domainOrder: zod.number(),
+      categoryName: zod.string(),
+      categoryOrder: zod.number(),
+      name: zod.string(),
+      description: zod.string().nullish(),
+      baselineDescription: zod.string().nullish(),
+      excellenceDescription: zod.string().nullish(),
+      orderIndex: zod.number(),
+      isIncluded: zod.boolean(),
+    }),
+  ),
+});
+
+/**
+ * @summary Super Admin atomic draft question edit; omitted existing IDs are rejected
+ */
+
+export const SaveAssessmentQuestionsParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const saveAssessmentQuestionsBodyQuestionsItemNameMax = 500;
+
+export const saveAssessmentQuestionsBodyQuestionsItemDescriptionMax = 5000;
+
+export const saveAssessmentQuestionsBodyQuestionsItemBaselineDescriptionMax = 5000;
+
+export const saveAssessmentQuestionsBodyQuestionsItemExcellenceDescriptionMax = 5000;
+
+export const saveAssessmentQuestionsBodyQuestionsItemOrderIndexMin = 0;
+export const saveAssessmentQuestionsBodyQuestionsItemOrderIndexMax = 1000;
+
+export const saveAssessmentQuestionsBodyQuestionsMax = 500;
+
+export const SaveAssessmentQuestionsBody = zod.object({
+  expectedQuestionsVersion: zod.number().min(1),
+  questions: zod
+    .array(
+      zod.object({
+        id: zod.number().min(1).optional(),
+        categoryId: zod.number().min(1),
+        name: zod
+          .string()
+          .min(1)
+          .max(saveAssessmentQuestionsBodyQuestionsItemNameMax),
+        description: zod
+          .string()
+          .max(saveAssessmentQuestionsBodyQuestionsItemDescriptionMax)
+          .nullish(),
+        baselineDescription: zod
+          .string()
+          .max(saveAssessmentQuestionsBodyQuestionsItemBaselineDescriptionMax)
+          .nullish(),
+        excellenceDescription: zod
+          .string()
+          .max(saveAssessmentQuestionsBodyQuestionsItemExcellenceDescriptionMax)
+          .nullish(),
+        orderIndex: zod
+          .number()
+          .min(saveAssessmentQuestionsBodyQuestionsItemOrderIndexMin)
+          .max(saveAssessmentQuestionsBodyQuestionsItemOrderIndexMax),
+        isIncluded: zod.boolean(),
+      }),
+    )
+    .max(saveAssessmentQuestionsBodyQuestionsMax),
+});
+
+export const SaveAssessmentQuestionsResponse = zod.object({
+  assessmentId: zod.number(),
+  companyId: zod.number(),
+  version: zod.number(),
+  signature: zod.string(),
+  customised: zod.boolean(),
+  canEdit: zod.boolean(),
+  canReturnToDraft: zod.boolean(),
+  lockReason: zod.string().nullable(),
+  includedCount: zod.number(),
+  questions: zod.array(
+    zod.object({
+      id: zod.number(),
+      assessmentId: zod.number(),
+      sourceCriterionId: zod.number().nullable(),
+      categoryId: zod.number(),
+      domainId: zod.number(),
+      domainName: zod.string(),
+      domainDescription: zod.string().nullish(),
+      domainOrder: zod.number(),
+      categoryName: zod.string(),
+      categoryOrder: zod.number(),
+      name: zod.string(),
+      description: zod.string().nullish(),
+      baselineDescription: zod.string().nullish(),
+      excellenceDescription: zod.string().nullish(),
+      orderIndex: zod.number(),
+      isIncluded: zod.boolean(),
+    }),
+  ),
+});
+
+/**
+ * @summary Super Admin copies questions to an unanswered draft in the same company
+ */
+
+export const CreateAssessmentRevisionParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const createAssessmentRevisionBodyNameMax = 500;
+
+export const CreateAssessmentRevisionBody = zod.object({
+  name: zod.string().min(1).max(createAssessmentRevisionBodyNameMax),
+  expectedQuestionsVersion: zod.number().min(1),
+});
+
+/**
  * @summary Assign users to an assessment cycle
  */
 export const AssignAssessmentParams = zod.object({
@@ -712,6 +868,7 @@ export const AssignAssessmentBody = zod.object({
 });
 
 export const AssignAssessmentResponse = zod.object({
+  questionsVersion: zod.number().min(1).optional(),
   id: zod.number(),
   companyId: zod.number(),
   name: zod.string(),
@@ -733,6 +890,39 @@ export const GetAssessmentResultsParams = zod.object({
 });
 
 export const GetAssessmentResultsResponse = zod.object({
+  questionSet: zod
+    .object({
+      assessmentId: zod.number(),
+      companyId: zod.number(),
+      version: zod.number(),
+      signature: zod.string(),
+      customised: zod.boolean(),
+      canEdit: zod.boolean(),
+      canReturnToDraft: zod.boolean(),
+      lockReason: zod.string().nullable(),
+      includedCount: zod.number(),
+      questions: zod.array(
+        zod.object({
+          id: zod.number(),
+          assessmentId: zod.number(),
+          sourceCriterionId: zod.number().nullable(),
+          categoryId: zod.number(),
+          domainId: zod.number(),
+          domainName: zod.string(),
+          domainDescription: zod.string().nullish(),
+          domainOrder: zod.number(),
+          categoryName: zod.string(),
+          categoryOrder: zod.number(),
+          name: zod.string(),
+          description: zod.string().nullish(),
+          baselineDescription: zod.string().nullish(),
+          excellenceDescription: zod.string().nullish(),
+          orderIndex: zod.number(),
+          isIncluded: zod.boolean(),
+        }),
+      ),
+    })
+    .optional(),
   assessmentId: zod.number(),
   assessmentName: zod.string(),
   userScores: zod.array(
@@ -764,7 +954,11 @@ export const GetAssessmentResultsResponse = zod.object({
       id: zod.number(),
       companyId: zod.number(),
       assessmentId: zod.number(),
-      criterionId: zod.number(),
+      criterionId: zod.number().nullable(),
+      assessmentQuestionId: zod.number().optional(),
+      questionName: zod.string().optional(),
+      domainName: zod.string().optional(),
+      categoryName: zod.string().optional(),
       authorUserId: zod.number(),
       authorName: zod.string(),
       note: zod.string(),
@@ -789,7 +983,8 @@ export const ListScoresResponseItem = zod.object({
   id: zod.number(),
   assessmentId: zod.number(),
   userId: zod.number(),
-  criterionId: zod.number(),
+  criterionId: zod.number().nullable(),
+  assessmentQuestionId: zod.number().optional(),
   score: zod
     .number()
     .min(listScoresResponseScoreMin)
@@ -803,14 +998,22 @@ export const ListScoresResponse = zod.array(ListScoresResponseItem);
 /**
  * @summary Submit/upsert scores for an assessment
  */
+
 export const submitScoresBodyScoresItemScoreMin = 0;
 export const submitScoresBodyScoresItemScoreMax = 4;
 
 export const SubmitScoresBody = zod.object({
+  questionsVersion: zod.number().min(1).optional(),
   assessmentId: zod.number(),
   scores: zod.array(
     zod.object({
-      criterionId: zod.number(),
+      criterionId: zod
+        .number()
+        .optional()
+        .describe(
+          "Legacy catalogue identity; accepted only for an unchanged mapped question set",
+        ),
+      assessmentQuestionId: zod.number().min(1).optional(),
       score: zod
         .number()
         .min(submitScoresBodyScoresItemScoreMin)
@@ -827,7 +1030,8 @@ export const SubmitScoresResponseItem = zod.object({
   id: zod.number(),
   assessmentId: zod.number(),
   userId: zod.number(),
-  criterionId: zod.number(),
+  criterionId: zod.number().nullable(),
+  assessmentQuestionId: zod.number().optional(),
   score: zod
     .number()
     .min(submitScoresResponseScoreMin)
@@ -841,16 +1045,22 @@ export const SubmitScoresResponse = zod.array(SubmitScoresResponseItem);
 /**
  * @summary List criterion notes for an assessment
  */
+
 export const ListCriterionNotesQueryParams = zod.object({
   assessmentId: zod.coerce.number(),
   criterionId: zod.coerce.number().nullish(),
+  assessmentQuestionId: zod.coerce.number().min(1).optional(),
 });
 
 export const ListCriterionNotesResponseItem = zod.object({
   id: zod.number(),
   companyId: zod.number(),
   assessmentId: zod.number(),
-  criterionId: zod.number(),
+  criterionId: zod.number().nullable(),
+  assessmentQuestionId: zod.number().optional(),
+  questionName: zod.string().optional(),
+  domainName: zod.string().optional(),
+  categoryName: zod.string().optional(),
   authorUserId: zod.number(),
   authorName: zod.string(),
   note: zod.string(),
@@ -866,8 +1076,10 @@ export const ListCriterionNotesResponse = zod.array(
  */
 
 export const CreateCriterionNoteBody = zod.object({
+  questionsVersion: zod.number().min(1).optional(),
+  assessmentQuestionId: zod.number().min(1).optional(),
   assessmentId: zod.number(),
-  criterionId: zod.number(),
+  criterionId: zod.number().optional(),
   note: zod.string().min(1),
 });
 
@@ -884,6 +1096,7 @@ export const GetRadarDataResponse = zod.object({
   domains: zod.array(zod.string()),
   series: zod.array(
     zod.object({
+      questionSetSignature: zod.string().optional(),
       label: zod.string(),
       scores: zod.array(zod.number().nullable()),
       color: zod.string().nullish(),
@@ -901,6 +1114,7 @@ export const GetProgressOverTimeQueryParams = zod.object({
 export const GetProgressOverTimeResponse = zod.object({
   cycles: zod.array(
     zod.object({
+      questionSetSignature: zod.string().optional(),
       assessmentId: zod.number(),
       assessmentName: zod.string(),
       completedAt: zod.string().nullish(),
@@ -1135,6 +1349,7 @@ export const GetCompanyReportResponse = zod.object({
   }),
   assessmentCycles: zod.array(
     zod.object({
+      questionsVersion: zod.number().min(1).optional(),
       id: zod.number(),
       companyId: zod.number(),
       name: zod.string(),
@@ -1150,6 +1365,39 @@ export const GetCompanyReportResponse = zod.object({
   ),
   latestResults: zod
     .object({
+      questionSet: zod
+        .object({
+          assessmentId: zod.number(),
+          companyId: zod.number(),
+          version: zod.number(),
+          signature: zod.string(),
+          customised: zod.boolean(),
+          canEdit: zod.boolean(),
+          canReturnToDraft: zod.boolean(),
+          lockReason: zod.string().nullable(),
+          includedCount: zod.number(),
+          questions: zod.array(
+            zod.object({
+              id: zod.number(),
+              assessmentId: zod.number(),
+              sourceCriterionId: zod.number().nullable(),
+              categoryId: zod.number(),
+              domainId: zod.number(),
+              domainName: zod.string(),
+              domainDescription: zod.string().nullish(),
+              domainOrder: zod.number(),
+              categoryName: zod.string(),
+              categoryOrder: zod.number(),
+              name: zod.string(),
+              description: zod.string().nullish(),
+              baselineDescription: zod.string().nullish(),
+              excellenceDescription: zod.string().nullish(),
+              orderIndex: zod.number(),
+              isIncluded: zod.boolean(),
+            }),
+          ),
+        })
+        .optional(),
       assessmentId: zod.number(),
       assessmentName: zod.string(),
       userScores: zod.array(
@@ -1181,7 +1429,11 @@ export const GetCompanyReportResponse = zod.object({
           id: zod.number(),
           companyId: zod.number(),
           assessmentId: zod.number(),
-          criterionId: zod.number(),
+          criterionId: zod.number().nullable(),
+          assessmentQuestionId: zod.number().optional(),
+          questionName: zod.string().optional(),
+          domainName: zod.string().optional(),
+          categoryName: zod.string().optional(),
           authorUserId: zod.number(),
           authorName: zod.string(),
           note: zod.string(),
@@ -1194,6 +1446,7 @@ export const GetCompanyReportResponse = zod.object({
   progressData: zod.object({
     cycles: zod.array(
       zod.object({
+        questionSetSignature: zod.string().optional(),
         assessmentId: zod.number(),
         assessmentName: zod.string(),
         completedAt: zod.string().nullish(),
@@ -1231,7 +1484,11 @@ export const GetCompanyReportResponse = zod.object({
       id: zod.number(),
       companyId: zod.number(),
       assessmentId: zod.number(),
-      criterionId: zod.number(),
+      criterionId: zod.number().nullable(),
+      assessmentQuestionId: zod.number().optional(),
+      questionName: zod.string().optional(),
+      domainName: zod.string().optional(),
+      categoryName: zod.string().optional(),
       authorUserId: zod.number(),
       authorName: zod.string(),
       note: zod.string(),
@@ -1514,6 +1771,7 @@ export const GetCrossCompanyRadarResponse = zod.object({
   domains: zod.array(zod.string()),
   series: zod.array(
     zod.object({
+      questionSetSignature: zod.string().optional(),
       label: zod.string(),
       scores: zod.array(zod.number().nullable()),
       color: zod.string().nullish(),
@@ -1576,7 +1834,28 @@ export const UpsertTargetResponse = zod.object({
 /**
  * @summary Programme Intelligence Dashboard data (Super Admin only)
  */
+export const getProgrammeIntelligenceQueryQuestionSetSignatureRegExp =
+  new RegExp("^[a-f0-9]{64}$");
+
+export const GetProgrammeIntelligenceQueryParams = zod.object({
+  questionSetSignature: zod.coerce
+    .string()
+    .regex(getProgrammeIntelligenceQueryQuestionSetSignatureRegExp)
+    .optional(),
+});
+
 export const GetProgrammeIntelligenceResponse = zod.object({
+  selectedQuestionSetSignature: zod.string().nullish(),
+  questionSetCohorts: zod
+    .array(
+      zod.object({
+        signature: zod.string(),
+        questionCount: zod.number(),
+        companiesScored: zod.number(),
+      }),
+    )
+    .optional(),
+  comparisonNotice: zod.string().optional(),
   kpis: zod.object({
     participatingCompanies: zod.number(),
     companiesWithCompletedAssessments: zod.number(),

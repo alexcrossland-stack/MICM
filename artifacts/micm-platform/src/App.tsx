@@ -13,6 +13,7 @@ import CompanyInfoPage from "@/pages/CompanyInfo";
 import AssessmentsPage from "@/pages/Assessments";
 import AssessmentDetailPage from "@/pages/AssessmentDetail";
 import TakeAssessmentPage from "@/pages/TakeAssessment";
+import AssessmentQuestionsPage from "@/pages/AssessmentQuestions";
 import ActionsPage from "@/pages/Actions";
 import UsersPage from "@/pages/Users";
 import CompaniesPage from "@/pages/Companies";
@@ -104,6 +105,8 @@ function ProtectedRoutes() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/assessments" component={AssessmentsPage} />
         <Route path="/assessments/:id/take" component={TakeAssessmentPage} />
+        <Route path="/assessment-questions" component={AssessmentQuestionsPage} />
+        <Route path="/assessments/:id/questions" component={AssessmentQuestionsPage} />
         <Route path="/assessments/:id" component={AssessmentDetailPage} />
         <Route path="/actions" component={ActionsPage} />
         <Route path="/users" component={UsersPage} />

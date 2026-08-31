@@ -1,9 +1,13 @@
-export function formatCriterionNote(note: any, author?: any) {
+export function formatCriterionNote(note: any, author?: any, question?: { name: string; domainName: string; categoryName: string }) {
   return {
     id: note.id,
     companyId: note.companyId,
     assessmentId: note.assessmentId,
     criterionId: note.criterionId,
+    assessmentQuestionId: note.assessmentQuestionId,
+    questionName: question?.name,
+    domainName: question?.domainName,
+    categoryName: question?.categoryName,
     authorUserId: note.authorUserId,
     authorName: author ? formatAuthorName(author) : "Unknown user",
     note: note.note,

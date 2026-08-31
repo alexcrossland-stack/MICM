@@ -6,21 +6,19 @@ import {
 } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { requireAuth } from "./auth";
+import { questionScoreContext } from "../lib/assessmentQuestions";
+import { GetProgrammeIntelligenceQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-async function getDomainScoresForCycle(cycleId: number, allDomains: any[], allCategories: any[], allCriteria: any[]) {
+async function getDomainScoresForCycle(cycleId: number, allDomains: any[]) {
+  const scoreContext = await questionScoreContext(cycleId);
   const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, cycleId));
 
-  const catToDomain: Record<number, number> = {};
-  for (const cat of allCategories) catToDomain[cat.id] = cat.domainId;
-  const critToCategory: Record<number, number> = {};
-  for (const crit of allCriteria) critToCategory[crit.id] = crit.categoryId;
 
   const domainMap: Record<number, number[]> = {};
   for (const s of scores) {
-    const catId = critToCategory[s.criterionId];
-    const dId = catId != null ? catToDomain[catId] : null;
+    const dId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
     if (dId) {
       if (!domainMap[dId]) domainMap[dId] = [];
       domainMap[dId].push(s.score);
@@ -45,9 +43,27 @@ router.get("/reports/programme", requireAuth, async (req: any, res): Promise<voi
   }
 
   const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
-  const allCategories = await db.select().from(categoriesTable);
-  const allCriteria = await db.select().from(criteriaTable);
   const allCompanies = await db.select().from(companiesTable).where(eq(companiesTable.isActive, true));
+  const query = GetProgrammeIntelligenceQueryParams.safeParse(req.query);
+  if (!query.success) { res.status(400).json({ error: "Invalid question-set filter" }); return; }
+  const cyclesByCompany = new Map<number, any[]>();
+  const contexts = new Map<number, Awaited<ReturnType<typeof questionScoreContext>>>();
+  const cohortMap = new Map<string, { signature: string; questionCount: number; companiesScored: number }>();
+  for (const company of allCompanies) {
+    const cycles = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, company.id));
+    cyclesByCompany.set(company.id, cycles);
+    const latest = cycles.filter(c => c.status === "completed").sort((a,b) => new Date(b.updatedAt).getTime()-new Date(a.updatedAt).getTime())[0];
+    if (latest) {
+      const context = await questionScoreContext(latest.id);
+      contexts.set(company.id, context);
+      const cohort = cohortMap.get(context.signature) ?? { signature: context.signature, questionCount: context.questions.length, companiesScored: 0 };
+      cohort.companiesScored++;
+      cohortMap.set(context.signature, cohort);
+    }
+  }
+  const questionSetCohorts = [...cohortMap.values()].sort((a,b) => b.companiesScored-a.companiesScored || a.signature.localeCompare(b.signature));
+  const selectedQuestionSetSignature = query.data.questionSetSignature ?? questionSetCohorts[0]?.signature ?? null;
+  if (query.data.questionSetSignature && !cohortMap.has(query.data.questionSetSignature)) { res.status(400).json({ error: "Question-set cohort not found" }); return; }
 
   // Domain score accumulation for benchmarks
   const domainScoreAccum: Record<number, number[]> = {};
@@ -65,7 +81,7 @@ router.get("/reports/programme", requireAuth, async (req: any, res): Promise<voi
   const allScores: number[] = [];
 
   for (const company of allCompanies) {
-    const cycles = await db.select().from(assessmentCyclesTable).where(eq(assessmentCyclesTable.companyId, company.id));
+    const cycles = cyclesByCompany.get(company.id) ?? [];
     totalAssessments += cycles.length;
     const completed = cycles.filter((c: any) => c.status === "completed");
     completedAssessments += completed.length;
@@ -102,16 +118,17 @@ router.get("/reports/programme", requireAuth, async (req: any, res): Promise<voi
       )[0];
       latestCompletedAt = latestCycle.updatedAt ? new Date(latestCycle.updatedAt).toISOString() : null;
 
-      domainScores = await getDomainScoresForCycle(latestCycle.id, allDomains, allCategories, allCriteria);
+      domainScores = await getDomainScoresForCycle(latestCycle.id, allDomains);
 
       const validScores = domainScores.filter((d) => d.score != null).map((d) => d.score as number);
+      const comparable = contexts.get(company.id)?.signature === selectedQuestionSetSignature;
       if (validScores.length > 0) {
         overallScore = Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 100) / 100;
-        allScores.push(...validScores);
+        if (comparable) allScores.push(...validScores);
       }
 
       for (const d of domainScores) {
-        if (d.score != null) domainScoreAccum[d.domainId].push(d.score);
+        if (comparable && d.score != null) domainScoreAccum[d.domainId].push(d.score);
       }
 
       // Risk: low action completion (>5 actions, <20% completed)
@@ -128,7 +145,7 @@ router.get("/reports/programme", requireAuth, async (req: any, res): Promise<voi
       }
     }
 
-    heatmap.push({
+    if (!contexts.has(company.id) || contexts.get(company.id)?.signature === selectedQuestionSetSignature) heatmap.push({
       companyId: company.id,
       companyName: company.name,
       sector: company.sector ?? null,
@@ -178,6 +195,9 @@ router.get("/reports/programme", requireAuth, async (req: any, res): Promise<voi
     : null;
 
   res.json({
+    selectedQuestionSetSignature,
+    questionSetCohorts,
+    comparisonNotice: questionSetCohorts.length > 1 ? "Different questions are not directly comparable. Maturity scores and heatmap use the selected question set; operational counts cover all companies." : "Maturity comparisons use matching question sets.",
     kpis: {
       participatingCompanies: allCompanies.length,
       companiesWithCompletedAssessments,

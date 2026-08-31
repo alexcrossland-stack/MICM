@@ -380,6 +380,7 @@ vi.mock("@workspace/api-client-react", () => {
     useCreateCompany: () => result(undefined),
     useCreateCriterionNote: () => result(undefined),
     useGetAssessment: () => result(assessments[0]),
+    useGetAssessmentQuestions: () => result({ assessmentId: 101, companyId: 1, version: 1, signature: "fixture", customised: false, canEdit: false, includedCount: 1, questions: domains.flatMap(d => d.categories.flatMap(c => c.criteria.map(q => ({ ...q, assessmentId: 101, sourceCriterionId: q.id, domainId: d.id, domainName: d.name, domainOrder: d.orderIndex, categoryName: c.name, categoryOrder: c.orderIndex, isIncluded: true })))) }),
     useGetAssessmentResults: () => result(companyReport.latestResults),
     useGetCompanyDashboard: () => result({
       companyId: 1,
@@ -504,6 +505,7 @@ describe("frontend smoke coverage", () => {
     expect(superAdminShell).toContain("Companies");
     expect(superAdminShell).toContain("Programme");
     expect(superAdminShell).toContain("Audit Logs");
+    expect(superAdminShell).toContain("Assessment Questions");
 
     setRole("company_admin", 2);
     const companyAdminShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
@@ -513,6 +515,7 @@ describe("frontend smoke coverage", () => {
     expect(companyAdminShell).not.toContain("Companies");
     expect(companyAdminShell).not.toContain("Programme");
     expect(companyAdminShell).not.toContain("Audit Logs");
+    expect(companyAdminShell).not.toContain("Assessment Questions");
 
     setRole("company_user", 3);
     const companyUserShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
@@ -523,6 +526,7 @@ describe("frontend smoke coverage", () => {
     expect(companyUserShell).not.toContain("Users");
     expect(companyUserShell).not.toContain("Programme");
     expect(companyUserShell).not.toContain("Audit Logs");
+    expect(companyUserShell).not.toContain("Assessment Questions");
   });
 
   it("smoke-renders company info with all controlled challenges and read-only Company User access", () => {

@@ -3,6 +3,7 @@ export * from "./users";
 export * from "./invitations";
 export * from "./domains";
 export * from "./assessments";
+export * from "./assessmentQuestions";
 export * from "./scores";
 export * from "./criterionNotes";
 export * from "./actions";

@@ -9,6 +9,9 @@ export const assessmentCyclesTable = pgTable("assessment_cycles", {
   name: text("name").notNull(),
   description: text("description"),
   status: text("status").notNull().default("draft"), // draft | active | completed
+  questionsVersion: integer("questions_version").notNull().default(1),
+  questionsLockedAt: timestamp("questions_locked_at", { withTimezone: true }),
+  questionsOrigin: text("questions_origin").notNull().default("catalogue_copy"),
   startDate: timestamp("start_date", { withTimezone: true }),
   endDate: timestamp("end_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

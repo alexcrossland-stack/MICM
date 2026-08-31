@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { questionScoreContext } from "../lib/assessmentQuestions";
 import { db } from "@workspace/db";
 import { companiesTable, usersTable, assessmentCyclesTable, actionsTable, scoresTable, criteriaTable, categoriesTable, domainsTable, assessmentAssigneesTable, invitationsTable, criterionNotesTable, auditLogsTable } from "@workspace/db";
 import { eq, and, count, sql, inArray } from "drizzle-orm";
@@ -487,18 +488,11 @@ router.get("/companies/:id/dashboard", requireAuth, async (req: any, res): Promi
 
   if (latestCycle.length > 0) {
     const cycleId = latestCycle[0].id;
-    const allCriteria = await db.select({ id: criteriaTable.id, categoryId: criteriaTable.categoryId }).from(criteriaTable);
-    const allCategories = await db.select({ id: categoriesTable.id, domainId: categoriesTable.domainId }).from(categoriesTable);
-    const criterionToDomain: Record<number, number> = {};
-    for (const cat of allCategories) {
-      for (const crit of allCriteria) {
-        if (crit.categoryId === cat.id) criterionToDomain[crit.id] = cat.domainId;
-      }
-    }
+    const scoreContext = await questionScoreContext(cycleId);
     const scores = await db.select().from(scoresTable).where(eq(scoresTable.assessmentId, cycleId));
     const domainScoreMap: Record<number, number[]> = {};
     for (const s of scores) {
-      const domainId = criterionToDomain[s.criterionId];
+      const domainId = scoreContext.domainByQuestionId[s.assessmentQuestionId];
       if (domainId) {
         if (!domainScoreMap[domainId]) domainScoreMap[domainId] = [];
         domainScoreMap[domainId].push(s.score);
