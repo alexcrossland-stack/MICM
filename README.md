@@ -150,7 +150,8 @@ Drizzle ORM schema lives in `lib/db/src/schema/`. Tables:
 | `invitations` | Shareable onboarding tokens |
 | `domains` | Six MICM domains (seeded, read-only at runtime) |
 | `categories` | Sub-groups within each domain |
-| `criteria` | Individual assessment criteria |
+| `criteria` | Standard questions for future assessments; reversible inclusion flag |
+| `assessment_questions` | Saved question snapshots for each assessment |
 | `assessment_cycles` | Assessment runs scoped to a company |
 | `assessment_assignees` | Which users are assigned to an assessment |
 | `scores` | Per-criterion scores submitted by a user |
@@ -182,10 +183,12 @@ DATABASE_URL=<target_url> pnpm --filter @workspace/db run migrate
 | `seed-demo-users` | Creates 3 Clerk dev users + DB records + sample company/assessment/scores | Yes (skips existing) |
 | `seed-staging-demo-data` | Creates fake DB-only staging/demo data across multiple companies, canonical demo account records, users, assessments, actions, targets, and evidence notes | Yes (replaces prior `MICM STAGING DEMO - ...` records) |
 
-The shared domain catalogue is read-only at runtime. Super Admins can customise
-questions on individual draft assessments without changing the catalogue or other
-assessments. See [Assessment Question Management](docs/ASSESSMENT_QUESTIONS.md)
-for the editor, permissions, migration cutover, testing and rollback requirements.
+Super Admins use **Standard Questions** to edit the core question text and guidance,
+add questions, or remove/restore questions for **new assessments across all companies**.
+Existing assessments keep their saved questions, answers and reports, including
+drafts created before a catalogue change. Domains and categories remain fixed.
+See [Assessment Question Management](docs/ASSESSMENT_QUESTIONS.md) for permissions,
+migrations, testing and rollback requirements.
 `seed-domains` is bootstrap-only: it refuses any existing catalogue data and never
 deletes or overwrites questions. Do not use it to update an established environment.
 

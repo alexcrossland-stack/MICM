@@ -106,7 +106,7 @@ function ProtectedRoutes() {
         <Route path="/assessments" component={AssessmentsPage} />
         <Route path="/assessments/:id/take" component={TakeAssessmentPage} />
         <Route path="/assessment-questions" component={AssessmentQuestionsPage} />
-        <Route path="/assessments/:id/questions" component={AssessmentQuestionsPage} />
+        <Route path="/assessments/:id/questions"><Redirect to="/assessment-questions" /></Route>
         <Route path="/assessments/:id" component={AssessmentDetailPage} />
         <Route path="/actions" component={ActionsPage} />
         <Route path="/users" component={UsersPage} />

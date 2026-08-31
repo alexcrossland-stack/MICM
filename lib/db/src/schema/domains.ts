@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -25,6 +25,7 @@ export const criteriaTable = pgTable("criteria", {
   baselineDescription: text("baseline_description"),
   excellenceDescription: text("excellence_description"),
   orderIndex: integer("order_index").notNull().default(0),
+  isIncluded: boolean("is_included").notNull().default(true),
 });
 
 export const insertDomainSchema = createInsertSchema(domainsTable).omit({ id: true });

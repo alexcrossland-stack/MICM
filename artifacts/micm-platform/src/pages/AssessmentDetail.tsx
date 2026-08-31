@@ -311,7 +311,7 @@ export default function AssessmentDetailPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {isSuperAdmin && <Link href={`/assessments/${id}/questions`}><Button variant="outline" size="sm">Manage questions</Button></Link>}
+        {isSuperAdmin && <Link href="/assessment-questions"><Button variant="outline" size="sm">Standard questions</Button></Link>}
         {canManage && assessment.status === "draft" && (
           <Button size="sm" onClick={() => handleStatusChange("active")} disabled={statusUpdating} className="gap-2">
             <Play className="w-3.5 h-3.5" />Activate

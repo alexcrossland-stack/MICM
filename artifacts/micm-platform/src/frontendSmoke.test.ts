@@ -381,6 +381,8 @@ vi.mock("@workspace/api-client-react", () => {
     useCreateCriterionNote: () => result(undefined),
     useGetAssessment: () => result(assessments[0]),
     useGetAssessmentQuestions: () => result({ assessmentId: 101, companyId: 1, version: 1, signature: "fixture", customised: false, canEdit: false, includedCount: 1, questions: domains.flatMap(d => d.categories.flatMap(c => c.criteria.map(q => ({ ...q, assessmentId: 101, sourceCriterionId: q.id, domainId: d.id, domainName: d.name, domainOrder: d.orderIndex, categoryName: c.name, categoryOrder: c.orderIndex, isIncluded: true })))) }),
+    useGetStandardAssessmentQuestions: () => result({ version: "a".repeat(64), includedCount: 1, questions: domains.flatMap(d => d.categories.flatMap(c => c.criteria.map(q => ({ ...q, categoryId: c.id, isIncluded: true })))) }),
+    useSaveStandardAssessmentQuestions: () => result(undefined),
     useGetAssessmentResults: () => result(companyReport.latestResults),
     useGetCompanyDashboard: () => result({
       companyId: 1,
@@ -462,6 +464,7 @@ vi.mock("@workspace/api-client-react", () => {
 import AppShell from "./components/AppShell";
 import AnalyticsPage from "./pages/Analytics";
 import AssessmentDetailPage, { getAssignableAssessmentUsers } from "./pages/AssessmentDetail";
+import AssessmentQuestionsPage from "./pages/AssessmentQuestions";
 import AuditLogsPage from "./pages/AuditLogs";
 import CompanyInfoPage from "./pages/CompanyInfo";
 import CompaniesPage, { companyArchiveConfirmationMatches } from "./pages/Companies";
@@ -505,7 +508,7 @@ describe("frontend smoke coverage", () => {
     expect(superAdminShell).toContain("Companies");
     expect(superAdminShell).toContain("Programme");
     expect(superAdminShell).toContain("Audit Logs");
-    expect(superAdminShell).toContain("Assessment Questions");
+    expect(superAdminShell).toContain("Standard Questions");
 
     setRole("company_admin", 2);
     const companyAdminShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
@@ -515,7 +518,7 @@ describe("frontend smoke coverage", () => {
     expect(companyAdminShell).not.toContain("Companies");
     expect(companyAdminShell).not.toContain("Programme");
     expect(companyAdminShell).not.toContain("Audit Logs");
-    expect(companyAdminShell).not.toContain("Assessment Questions");
+    expect(companyAdminShell).not.toContain("Standard Questions");
 
     setRole("company_user", 3);
     const companyUserShell = render(React.createElement(AppShell, null, React.createElement("main", null, "Content")));
@@ -526,7 +529,30 @@ describe("frontend smoke coverage", () => {
     expect(companyUserShell).not.toContain("Users");
     expect(companyUserShell).not.toContain("Programme");
     expect(companyUserShell).not.toContain("Audit Logs");
-    expect(companyUserShell).not.toContain("Assessment Questions");
+    expect(companyUserShell).not.toContain("Standard Questions");
+  });
+
+  it("shows a global standard question editor without an assessment or company picker only to Super Admins", () => {
+    setRole("super_admin", 1);
+    const editor = render(React.createElement(AssessmentQuestionsPage));
+    expect(editor).toContain("Standard Assessment Questions");
+    expect(editor).toContain("new assessments across all companies");
+    expect(editor).toContain("Existing assessments, answers and reports stay unchanged.");
+    expect(editor).toContain("Question text");
+    expect(editor).toContain("Supporting description");
+    expect(editor).toContain("Baseline guidance");
+    expect(editor).toContain("Excellence guidance");
+    expect(editor).toContain("Add question");
+    expect(editor).toContain("Show removed");
+    expect(editor).toContain("Save standard questions");
+    expect(editor).not.toMatch(/Company selector|Assessment selector|Create revised assessment|Acme Precision/);
+    for (const role of ["company_admin", "company_user"] as const) {
+      setRole(role);
+      const denied = render(React.createElement(AssessmentQuestionsPage));
+      expect(denied).toContain("Super Admin access is required");
+      expect(denied).not.toContain("Save standard questions");
+      expect(denied).not.toContain("Question text");
+    }
   });
 
   it("smoke-renders company info with all controlled challenges and read-only Company User access", () => {

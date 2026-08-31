@@ -43,6 +43,7 @@ app.use(securityHeaders());
 app.use(cors(createCorsOptions()));
 // Bounded full-questionnaire saves can exceed Express's default 100 KB limit.
 app.put("/api/assessments/:id/questions", express.json({ limit: "8mb" }));
+app.put("/api/standard-assessment-questions", express.json({ limit: "8mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

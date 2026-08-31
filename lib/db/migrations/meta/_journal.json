@@ -57,6 +57,13 @@
       "when": 1788168489501,
       "tag": "0007_nervous_venom",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788182731250,
+      "tag": "0008_smiling_the_phantom",
+      "breakpoints": true
     }
   ]
 }

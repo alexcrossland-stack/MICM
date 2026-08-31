@@ -110,7 +110,7 @@ async function seed() {
   // 2. Get all criteria for score generation
   const allDomains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
   const allCategories = await db.select().from(categoriesTable);
-  const allCriteria = await db.select().from(criteriaTable);
+  const allCriteria = await db.select().from(criteriaTable).where(eq(criteriaTable.isIncluded, true));
   console.log(`Loaded ${allDomains.length} domains, ${allCriteria.length} criteria`);
 
   // 3. Create or find demo company

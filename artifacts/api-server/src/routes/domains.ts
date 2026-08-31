@@ -11,7 +11,7 @@ const router: IRouter = Router();
 router.get("/domains", requireAuth, async (_req: any, res): Promise<void> => {
   const domains = await db.select().from(domainsTable).orderBy(domainsTable.orderIndex);
   const categories = await db.select().from(categoriesTable).orderBy(categoriesTable.orderIndex);
-  const criteria = await db.select().from(criteriaTable).orderBy(criteriaTable.orderIndex);
+  const criteria = await db.select().from(criteriaTable).where(eq(criteriaTable.isIncluded, true)).orderBy(criteriaTable.orderIndex);
 
   const result = domains.map(domain => ({
     id: domain.id,
