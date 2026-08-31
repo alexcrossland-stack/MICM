@@ -712,6 +712,206 @@ export const UpdateAssessmentResponse = zod.object({
 });
 
 /**
+ * @summary Super Admin reads the standard catalogue, including removed questions
+ */
+export const getStandardAssessmentQuestionsResponseVersionRegExp = new RegExp(
+  "^[a-f0-9]{64}$",
+);
+export const getStandardAssessmentQuestionsResponseIncludedCountMin = 0;
+
+export const getStandardAssessmentQuestionsResponseQuestionsItemOneNameMax = 500;
+
+export const getStandardAssessmentQuestionsResponseQuestionsItemOneDescriptionMax = 5000;
+
+export const getStandardAssessmentQuestionsResponseQuestionsItemOneBaselineDescriptionMax = 5000;
+
+export const getStandardAssessmentQuestionsResponseQuestionsItemOneExcellenceDescriptionMax = 5000;
+
+export const getStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMin = 0;
+export const getStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMax = 1000;
+
+export const GetStandardAssessmentQuestionsResponse = zod.object({
+  version: zod
+    .string()
+    .regex(getStandardAssessmentQuestionsResponseVersionRegExp)
+    .describe("Opaque content version for optimistic concurrency"),
+  includedCount: zod
+    .number()
+    .min(getStandardAssessmentQuestionsResponseIncludedCountMin),
+  questions: zod.array(
+    zod
+      .object({
+        id: zod.number().min(1).optional(),
+        categoryId: zod.number().min(1),
+        name: zod
+          .string()
+          .min(1)
+          .max(getStandardAssessmentQuestionsResponseQuestionsItemOneNameMax),
+        description: zod
+          .string()
+          .max(
+            getStandardAssessmentQuestionsResponseQuestionsItemOneDescriptionMax,
+          )
+          .nullish(),
+        baselineDescription: zod
+          .string()
+          .max(
+            getStandardAssessmentQuestionsResponseQuestionsItemOneBaselineDescriptionMax,
+          )
+          .nullish(),
+        excellenceDescription: zod
+          .string()
+          .max(
+            getStandardAssessmentQuestionsResponseQuestionsItemOneExcellenceDescriptionMax,
+          )
+          .nullish(),
+        orderIndex: zod
+          .number()
+          .min(
+            getStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMin,
+          )
+          .max(
+            getStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMax,
+          ),
+        isIncluded: zod.boolean(),
+      })
+      .and(
+        zod.object({
+          id: zod.number().min(1),
+        }),
+      ),
+  ),
+});
+
+/**
+ * @summary Super Admin atomically updates the standard catalogue; existing assessments never change
+ */
+export const saveStandardAssessmentQuestionsBodyExpectedVersionRegExp =
+  new RegExp("^[a-f0-9]{64}$");
+
+export const saveStandardAssessmentQuestionsBodyQuestionsItemNameMax = 500;
+
+export const saveStandardAssessmentQuestionsBodyQuestionsItemDescriptionMax = 5000;
+
+export const saveStandardAssessmentQuestionsBodyQuestionsItemBaselineDescriptionMax = 5000;
+
+export const saveStandardAssessmentQuestionsBodyQuestionsItemExcellenceDescriptionMax = 5000;
+
+export const saveStandardAssessmentQuestionsBodyQuestionsItemOrderIndexMin = 0;
+export const saveStandardAssessmentQuestionsBodyQuestionsItemOrderIndexMax = 1000;
+
+export const saveStandardAssessmentQuestionsBodyQuestionsMax = 500;
+
+export const SaveStandardAssessmentQuestionsBody = zod.object({
+  expectedVersion: zod
+    .string()
+    .regex(saveStandardAssessmentQuestionsBodyExpectedVersionRegExp),
+  questions: zod
+    .array(
+      zod.object({
+        id: zod.number().min(1).optional(),
+        categoryId: zod.number().min(1),
+        name: zod
+          .string()
+          .min(1)
+          .max(saveStandardAssessmentQuestionsBodyQuestionsItemNameMax),
+        description: zod
+          .string()
+          .max(saveStandardAssessmentQuestionsBodyQuestionsItemDescriptionMax)
+          .nullish(),
+        baselineDescription: zod
+          .string()
+          .max(
+            saveStandardAssessmentQuestionsBodyQuestionsItemBaselineDescriptionMax,
+          )
+          .nullish(),
+        excellenceDescription: zod
+          .string()
+          .max(
+            saveStandardAssessmentQuestionsBodyQuestionsItemExcellenceDescriptionMax,
+          )
+          .nullish(),
+        orderIndex: zod
+          .number()
+          .min(saveStandardAssessmentQuestionsBodyQuestionsItemOrderIndexMin)
+          .max(saveStandardAssessmentQuestionsBodyQuestionsItemOrderIndexMax),
+        isIncluded: zod.boolean(),
+      }),
+    )
+    .min(1)
+    .max(saveStandardAssessmentQuestionsBodyQuestionsMax),
+});
+
+export const saveStandardAssessmentQuestionsResponseVersionRegExp = new RegExp(
+  "^[a-f0-9]{64}$",
+);
+export const saveStandardAssessmentQuestionsResponseIncludedCountMin = 0;
+
+export const saveStandardAssessmentQuestionsResponseQuestionsItemOneNameMax = 500;
+
+export const saveStandardAssessmentQuestionsResponseQuestionsItemOneDescriptionMax = 5000;
+
+export const saveStandardAssessmentQuestionsResponseQuestionsItemOneBaselineDescriptionMax = 5000;
+
+export const saveStandardAssessmentQuestionsResponseQuestionsItemOneExcellenceDescriptionMax = 5000;
+
+export const saveStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMin = 0;
+export const saveStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMax = 1000;
+
+export const SaveStandardAssessmentQuestionsResponse = zod.object({
+  version: zod
+    .string()
+    .regex(saveStandardAssessmentQuestionsResponseVersionRegExp)
+    .describe("Opaque content version for optimistic concurrency"),
+  includedCount: zod
+    .number()
+    .min(saveStandardAssessmentQuestionsResponseIncludedCountMin),
+  questions: zod.array(
+    zod
+      .object({
+        id: zod.number().min(1).optional(),
+        categoryId: zod.number().min(1),
+        name: zod
+          .string()
+          .min(1)
+          .max(saveStandardAssessmentQuestionsResponseQuestionsItemOneNameMax),
+        description: zod
+          .string()
+          .max(
+            saveStandardAssessmentQuestionsResponseQuestionsItemOneDescriptionMax,
+          )
+          .nullish(),
+        baselineDescription: zod
+          .string()
+          .max(
+            saveStandardAssessmentQuestionsResponseQuestionsItemOneBaselineDescriptionMax,
+          )
+          .nullish(),
+        excellenceDescription: zod
+          .string()
+          .max(
+            saveStandardAssessmentQuestionsResponseQuestionsItemOneExcellenceDescriptionMax,
+          )
+          .nullish(),
+        orderIndex: zod
+          .number()
+          .min(
+            saveStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMin,
+          )
+          .max(
+            saveStandardAssessmentQuestionsResponseQuestionsItemOneOrderIndexMax,
+          ),
+        isIncluded: zod.boolean(),
+      })
+      .and(
+        zod.object({
+          id: zod.number().min(1),
+        }),
+      ),
+  ),
+});
+
+/**
  * @summary Read the saved question set for an authorized assessment
  */
 

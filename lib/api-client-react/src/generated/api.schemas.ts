@@ -611,6 +611,33 @@ export interface AssessmentQuestionInput {
   isIncluded: boolean;
 }
 
+export type StandardAssessmentQuestionSetQuestionsItem =
+  AssessmentQuestionInput & {
+    /** @minimum 1 */
+    id: number;
+  };
+
+export interface StandardAssessmentQuestionSet {
+  /**
+   * Opaque content version for optimistic concurrency
+   * @pattern ^[a-f0-9]{64}$
+   */
+  version: string;
+  /** @minimum 0 */
+  includedCount: number;
+  questions: StandardAssessmentQuestionSetQuestionsItem[];
+}
+
+export interface SaveStandardAssessmentQuestionsBody {
+  /** @pattern ^[a-f0-9]{64}$ */
+  expectedVersion: string;
+  /**
+   * @minItems 1
+   * @maxItems 500
+   */
+  questions: AssessmentQuestionInput[];
+}
+
 export interface SaveAssessmentQuestionsBody {
   /** @minimum 1 */
   expectedQuestionsVersion: number;

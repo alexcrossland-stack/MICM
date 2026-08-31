@@ -463,6 +463,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/AssessmentCycle"
 
+  /standard-assessment-questions:
+    get:
+      operationId: getStandardAssessmentQuestions
+      tags: [assessments]
+      summary: Super Admin reads the standard catalogue, including removed questions
+      responses:
+        "200":
+          description: Standard questions used for future assessments only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StandardAssessmentQuestionSet" }
+        "401": { description: Authentication required }
+        "403": { description: Super Admin required }
+    put:
+      operationId: saveStandardAssessmentQuestions
+      tags: [assessments]
+      summary: Super Admin atomically updates the standard catalogue; existing assessments never change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveStandardAssessmentQuestionsBody" }
+      responses:
+        "200":
+          description: Saved standard questions; at least one included question is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StandardAssessmentQuestionSet" }
+        "400": { description: "Invalid questions, unknown IDs or omitted existing rows" }
+        "401": { description: Authentication required }
+        "403": { description: Super Admin required }
+        "409": { description: Catalogue changed; reload before saving }
+
   /assessments/{id}/questions:
     parameters:
       - name: id
@@ -1878,6 +1911,37 @@ components:
         orderIndex: { type: integer, minimum: 0, maximum: 1000 }
         isIncluded: { type: boolean }
       required: [categoryId, name, orderIndex, isIncluded]
+
+    StandardAssessmentQuestionSet:
+      type: object
+      properties:
+        version:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: Opaque content version for optimistic concurrency
+        includedCount: { type: integer, minimum: 0 }
+        questions:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/AssessmentQuestionInput"
+              - type: object
+                required: [id]
+                properties:
+                  id: { type: integer, minimum: 1 }
+      required: [version, includedCount, questions]
+
+    SaveStandardAssessmentQuestionsBody:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion: { type: string, pattern: "^[a-f0-9]{64}$" }
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: "#/components/schemas/AssessmentQuestionInput" }
+      required: [expectedVersion, questions]
 
     AssessmentQuestion:
       type: object

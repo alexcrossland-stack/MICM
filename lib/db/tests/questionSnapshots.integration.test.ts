@@ -53,6 +53,7 @@ describe.skipIf(!url)(
       INSERT INTO categories(id,domain_id,name) VALUES (1,1,'Planning');
       INSERT INTO criteria(id,category_id,name,description,baseline_description,excellence_description)
         VALUES (1,1,'Original question','Full description','Baseline','Excellence'),(2,1,'Second question',NULL,NULL,NULL);
+      SELECT setval('criteria_id_seq',2);
       INSERT INTO assessment_cycles(id,company_id,name,status) VALUES (1,1,'QA TEST - Legacy','completed'),(2,2,'QA TEST - Draft','draft');
       SELECT setval('assessment_cycles_id_seq',2);
       INSERT INTO assessment_assignees(assessment_id,user_id,completed_at) VALUES (1,2,now());
@@ -157,6 +158,59 @@ describe.skipIf(!url)(
       excellenceDescription: q.excellenceDescription,
       orderIndex: q.orderIndex,
       isIncluded: q.isIncluded,
+    });
+
+    it("defaults the standard catalogue to included and serializes whole-catalogue edits", async () => {
+      expect((await pool.query("SELECT is_included FROM criteria")).rows.every(q => q.is_included)).toBe(true);
+      const path = "/api/standard-assessment-questions";
+      const before = (await request(app).get(path).expect(200)).body;
+      const snapshots = (await pool.query("SELECT * FROM assessment_questions ORDER BY id")).rows;
+      const body = { expectedVersion: before.version, questions: before.questions.map(input) };
+      body.questions[0].name = "Standard changed once";
+      const responses = await Promise.all([
+        request(app).put(path).send(body),
+        request(app).put(path).send(body),
+      ]);
+      expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
+      const saved = (await request(app).get(path).expect(200)).body;
+      expect(saved.version).not.toBe(before.version);
+      expect((await pool.query("SELECT * FROM assessment_questions ORDER BY id")).rows).toEqual(snapshots);
+      await pool.query(`CREATE FUNCTION qa_reject_catalogue_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'QA forced catalogue audit failure'; END $$;
+        CREATE TRIGGER qa_reject_catalogue_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION qa_reject_catalogue_audit();`);
+      try {
+        await request(app).put(path).send({ expectedVersion: saved.version, questions: [...saved.questions.map((q: any) => ({ ...input(q), name: "Rollback catalogue edit", isIncluded: false })), { ...input(saved.questions[0]), id: undefined, name: "Rollback catalogue addition" }] }).expect(500);
+        expect((await request(app).get(path).expect(200)).body).toEqual(saved);
+      } finally {
+        await pool.query("DROP TRIGGER qa_reject_catalogue_audit ON audit_logs; DROP FUNCTION qa_reject_catalogue_audit();");
+      }
+    });
+
+    it("copies a consistent committed catalogue during concurrent save/create and never changes old answers", async () => {
+      const path = "/api/standard-assessment-questions";
+      const before = (await request(app).get(path).expect(200)).body;
+      const historical = (await pool.query("SELECT * FROM assessment_questions ORDER BY id")).rows;
+      const scores = (await pool.query("SELECT * FROM scores ORDER BY id")).rows;
+      const notes = (await pool.query("SELECT * FROM criterion_notes ORDER BY id")).rows;
+      const questions = before.questions.map(input);
+      questions[0].name = "Next catalogue wording";
+      questions[1].isIncluded = false;
+      questions.push({ ...input(before.questions[0]), id: undefined, name: "Added standard question" });
+      const [saved, created] = await Promise.all([
+        request(app).put(path).send({ expectedVersion: before.version, questions }),
+        request(app).post("/api/assessments").send({ companyId: 1, name: "QA TEST - Catalogue race" }),
+      ]);
+      expect(saved.status, saved.text).toBe(200);
+      expect(created.status, created.text).toBe(201);
+      const names = (set: any[]) => set.filter(q => q.isIncluded).map(q => q.name).sort();
+      const createdSet = (await request(app).get(`/api/assessments/${created.body.id}/questions`).expect(200)).body;
+      expect([names(before.questions), names(saved.body.questions)]).toContainEqual(names(createdSet.questions));
+      const next = await request(app).post("/api/assessments").send({ companyId: 2, name: "QA TEST - Latest catalogue" }).expect(201);
+      expect(names((await request(app).get(`/api/assessments/${next.body.id}/questions`).expect(200)).body.questions)).toEqual(names(saved.body.questions));
+      expect((await pool.query("SELECT * FROM assessment_questions WHERE assessment_id IN (1,2) ORDER BY id")).rows).toEqual(historical);
+      expect((await pool.query("SELECT * FROM scores ORDER BY id")).rows).toEqual(scores);
+      expect((await pool.query("SELECT * FROM criterion_notes ORDER BY id")).rows).toEqual(notes);
+      expect((await pool.query("SELECT count(*)::int n FROM criteria WHERE is_included=false")).rows[0].n).toBe(1);
+      expect((await pool.query("SELECT company_id, metadata FROM audit_logs WHERE event_type='catalogue.questions_changed'")).rows.every(row => row.company_id === null && !JSON.stringify(row.metadata).includes("Next catalogue wording"))).toBe(true);
     });
 
     it("serializes concurrent editors and rolls back question saves when auditing fails", async () => {

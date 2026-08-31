@@ -28,7 +28,8 @@ export async function createQuestionSnapshot(
   } else {
     const domains = await store.select().from(domainsTable);
     const categories = await store.select().from(categoriesTable);
-    const criteria = await store.select().from(criteriaTable);
+    // One statement observes either the whole old catalogue or the whole committed update.
+    const criteria = await store.select().from(criteriaTable).where(eq(criteriaTable.isIncluded, true));
     rows = criteria.map((criterion) => {
       const category = categories.find((c) => c.id === criterion.categoryId);
       const domain = domains.find((d) => d.id === category?.domainId);

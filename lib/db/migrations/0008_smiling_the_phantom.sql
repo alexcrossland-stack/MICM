@@ -1,0 +1,1 @@
+ALTER TABLE "criteria" ADD COLUMN "is_included" boolean DEFAULT true NOT NULL;

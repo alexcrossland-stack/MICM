@@ -62,7 +62,9 @@ import type {
   ProgressData,
   RadarData,
   SaveAssessmentQuestionsBody,
+  SaveStandardAssessmentQuestionsBody,
   Score,
+  StandardAssessmentQuestionSet,
   SubmitScoresBody,
   SuperAdminReport,
   UpdateActionBody,
@@ -1938,6 +1940,178 @@ export const useUpdateAssessment = <
   TContext
 > => {
   return useMutation(getUpdateAssessmentMutationOptions(options));
+};
+
+/**
+ * @summary Super Admin reads the standard catalogue, including removed questions
+ */
+export const getGetStandardAssessmentQuestionsUrl = () => {
+  return `/api/standard-assessment-questions`;
+};
+
+export const getStandardAssessmentQuestions = async (
+  options?: RequestInit,
+): Promise<StandardAssessmentQuestionSet> => {
+  return customFetch<StandardAssessmentQuestionSet>(
+    getGetStandardAssessmentQuestionsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStandardAssessmentQuestionsQueryKey = () => {
+  return [`/api/standard-assessment-questions`] as const;
+};
+
+export const getGetStandardAssessmentQuestionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStandardAssessmentQuestions>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStandardAssessmentQuestions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStandardAssessmentQuestionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStandardAssessmentQuestions>>
+  > = ({ signal }) =>
+    getStandardAssessmentQuestions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStandardAssessmentQuestions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStandardAssessmentQuestionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStandardAssessmentQuestions>>
+>;
+export type GetStandardAssessmentQuestionsQueryError = ErrorType<void>;
+
+/**
+ * @summary Super Admin reads the standard catalogue, including removed questions
+ */
+
+export function useGetStandardAssessmentQuestions<
+  TData = Awaited<ReturnType<typeof getStandardAssessmentQuestions>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStandardAssessmentQuestions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStandardAssessmentQuestionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Super Admin atomically updates the standard catalogue; existing assessments never change
+ */
+export const getSaveStandardAssessmentQuestionsUrl = () => {
+  return `/api/standard-assessment-questions`;
+};
+
+export const saveStandardAssessmentQuestions = async (
+  saveStandardAssessmentQuestionsBody: SaveStandardAssessmentQuestionsBody,
+  options?: RequestInit,
+): Promise<StandardAssessmentQuestionSet> => {
+  return customFetch<StandardAssessmentQuestionSet>(
+    getSaveStandardAssessmentQuestionsUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(saveStandardAssessmentQuestionsBody),
+    },
+  );
+};
+
+export const getSaveStandardAssessmentQuestionsMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveStandardAssessmentQuestions>>,
+    TError,
+    { data: BodyType<SaveStandardAssessmentQuestionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveStandardAssessmentQuestions>>,
+  TError,
+  { data: BodyType<SaveStandardAssessmentQuestionsBody> },
+  TContext
+> => {
+  const mutationKey = ["saveStandardAssessmentQuestions"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveStandardAssessmentQuestions>>,
+    { data: BodyType<SaveStandardAssessmentQuestionsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return saveStandardAssessmentQuestions(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveStandardAssessmentQuestionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveStandardAssessmentQuestions>>
+>;
+export type SaveStandardAssessmentQuestionsMutationBody =
+  BodyType<SaveStandardAssessmentQuestionsBody>;
+export type SaveStandardAssessmentQuestionsMutationError = ErrorType<void>;
+
+/**
+ * @summary Super Admin atomically updates the standard catalogue; existing assessments never change
+ */
+export const useSaveStandardAssessmentQuestions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveStandardAssessmentQuestions>>,
+    TError,
+    { data: BodyType<SaveStandardAssessmentQuestionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveStandardAssessmentQuestions>>,
+  TError,
+  { data: BodyType<SaveStandardAssessmentQuestionsBody> },
+  TContext
+> => {
+  return useMutation(
+    getSaveStandardAssessmentQuestionsMutationOptions(options),
+  );
 };
 
 /**

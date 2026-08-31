@@ -6,7 +6,7 @@
  * It does not create Clerk users or credentials.
  */
 
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { assertStagingDemoSeedAllowed } from "./stagingDemoSeedGuards";
 import {
   STAGING_DEMO_SUPER_ADMIN,
@@ -177,7 +177,7 @@ async function seed() {
     .from(domainsTable)
     .orderBy(domainsTable.orderIndex);
   const categories = await db.select().from(categoriesTable);
-  const criteria = await db.select().from(criteriaTable);
+  const criteria = await db.select().from(criteriaTable).where(eq(criteriaTable.isIncluded, true));
   if (domains.length === 0 || criteria.length === 0) {
     throw new Error(
       "No MICM domains/criteria found. Run seed-domains before seed-staging-demo-data.",

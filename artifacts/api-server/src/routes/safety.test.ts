@@ -63,6 +63,7 @@ const mock = vi.hoisted(() => {
     domainsTable: makeTable("domains", ["id", "name", "description", "orderIndex"]),
     categoriesTable: makeTable("categories", ["id", "domainId", "name", "description", "orderIndex"]),
     criteriaTable: makeTable("criteria", [
+      "isIncluded",
       "id",
       "categoryId",
       "name",
@@ -258,6 +259,7 @@ const mock = vi.hoisted(() => {
     state.authUserId = "clerk-super";
     state.dbHealthy = true;
     state.rows = seedRows();
+    state.rows.criteria.forEach(q => { q.isIncluded = true; });
     state.rows.assessmentQuestions = state.rows.assessmentCycles.flatMap(cycle => {
       Object.assign(cycle, { questionsVersion: 1, questionsOrigin: "legacy_backfill", questionsLockedAt: cycle.status === "draft" ? null : cloneDate(now) });
       return state.rows.criteria.map(criterion => {
@@ -518,6 +520,118 @@ function signInAs(clerkUserId: string) {
 function questionInput(q: Row) {
   return { id: q.id, categoryId: q.categoryId, name: q.name, description: q.description, baselineDescription: q.baselineDescription, excellenceDescription: q.excellenceDescription, orderIndex: q.orderIndex, isIncluded: q.isIncluded };
 }
+
+describe("standard assessment catalogue", () => {
+  beforeEach(() => mock.reset());
+  const path = "/api/standard-assessment-questions";
+  const getSet = async () => (await request(app).get(path).expect(200)).body;
+  const saveSet = (set: Row, questions = set.questions) => request(app).put(path).send({ expectedVersion: set.version, questions });
+
+  it("requires an active Super Admin for global reads and changes", async () => {
+    const set = await getSet();
+    expect(set.includedCount).toBe(3);
+    for (const user of ["clerk-admin-a", "clerk-user-a", "clerk-admin-b", "clerk-user-b"]) {
+      signInAs(user);
+      await request(app).get(path).expect(403);
+      expect((await saveSet(set)).status).toBe(403);
+    }
+    signInAs("clerk-super");
+    mock.state.rows.users[0].isActive = false;
+    await request(app).get(path).expect(403);
+    expect((await saveSet(set)).status).toBe(403);
+    signInAs("");
+    await request(app).get(path).expect(401);
+  });
+
+  it("applies edited, added and removed questions to new assessments in every company only", async () => {
+    const set = await getSet();
+    const history = structuredClone({ questions: mock.state.rows.assessmentQuestions, scores: mock.state.rows.scores, notes: mock.state.rows.criterionNotes });
+    const reportBefore = await request(app).get("/api/assessments/103/results").expect(200);
+    const changed = set.questions.map(questionInput);
+    changed[0] = { ...changed[0], name: "Future strategy wording", description: "Future description", baselineDescription: "Future baseline", excellenceDescription: "Future excellence", categoryId: 2, orderIndex: 0 };
+    changed[1].isIncluded = false;
+    changed.push({ ...changed[0], id: undefined, name: "New standard question", categoryId: 1 });
+    const saved = await saveSet(set, changed);
+    expect(saved.status, saved.text).toBe(200);
+    expect(saved.body.includedCount).toBe(3);
+    expect(mock.state.rows.criteria).toHaveLength(4);
+    expect(mock.state.rows.criteria.find(q => q.id === 2)?.isIncluded).toBe(false);
+    for (const [companyId, actor] of [[1, "clerk-super"], [2, "clerk-super"], [1, "clerk-admin-a"]] as const) {
+      signInAs(actor);
+      const created = await request(app).post("/api/assessments").send({ companyId, name: "QA TEST - Latest standard" }).expect(201);
+      const questions = (await request(app).get(`/api/assessments/${created.body.id}/questions`).expect(200)).body.questions;
+      expect(questions).toHaveLength(3);
+      expect(questions.find((q: Row) => q.sourceCriterionId === 1)).toMatchObject({ name: "Future strategy wording", description: "Future description", baselineDescription: "Future baseline", excellenceDescription: "Future excellence", categoryName: "Execution", domainName: "Operations", orderIndex: 0 });
+      expect(questions.some((q: Row) => q.sourceCriterionId === 2)).toBe(false);
+      expect(questions.some((q: Row) => q.name === "New standard question")).toBe(true);
+    }
+    signInAs("clerk-super");
+    expect(mock.state.rows.assessmentQuestions.filter(q => [101, 102, 103, 201, 202].includes(q.assessmentId))).toEqual(history.questions);
+    expect(mock.state.rows.scores).toEqual(history.scores);
+    expect(mock.state.rows.criterionNotes).toEqual(history.notes);
+    expect((await request(app).get("/api/assessments/103/results").expect(200)).body).toEqual(reportBefore.body);
+    for (const format of ["csv", "pdf", "xlsx"]) {
+      const exported = await request(app).get(`/api/reports/company/1/export?template=operational_detail&format=${format}`).expect(200);
+      const content = Buffer.isBuffer(exported.body) ? exported.body.toString() : exported.text;
+      expect(content).toContain("Strategy criterion 1");
+      expect(content).not.toContain("Future strategy wording");
+      expect(content).not.toContain("Beta evidence note");
+    }
+    const domains = (await request(app).get("/api/domains").expect(200)).body;
+    expect(domains.flatMap((d: Row) => d.categories.flatMap((c: Row) => c.criteria)).map((q: Row) => q.id)).not.toContain(2);
+    const restored = await saveSet(saved.body, saved.body.questions.map((q: Row) => ({ ...q, isIncluded: true })));
+    expect(restored.status).toBe(200);
+    const next = await request(app).post("/api/assessments").send({ companyId: 2, name: "QA TEST - Restored standard" }).expect(201);
+    expect((await request(app).get(`/api/assessments/${next.body.id}/questions`)).body.includedCount).toBe(4);
+    expect(mock.state.rows.assessmentQuestions.filter(q => [101, 102, 103, 201, 202].includes(q.assessmentId))).toEqual(history.questions);
+  });
+
+  it("scores and completes new assessments against only the latest included standard questions", async () => {
+    const set = await getSet();
+    await saveSet(set, set.questions.map((q: Row) => ({ ...q, name: q.id === 1 ? "Revised standard planning" : q.name, isIncluded: q.id !== 2 }))).expect(200);
+    const cycle = (await request(app).post("/api/assessments").send({ companyId: 1, name: "QA TEST - Standard completion" }).expect(201)).body;
+    const questions = (await request(app).get(`/api/assessments/${cycle.id}/questions`).expect(200)).body.questions;
+    expect(questions).toHaveLength(2);
+    await request(app).patch(`/api/assessments/${cycle.id}`).send({ status: "active", expectedQuestionsVersion: 1 }).expect(200);
+    await request(app).post("/api/scores").send({ assessmentId: cycle.id, questionsVersion: 1, scores: [{ assessmentQuestionId: questions[0].id, score: 2 }] }).expect(200);
+    await request(app).patch(`/api/assessments/${cycle.id}`).send({ status: "completed", expectedQuestionsVersion: 1 }).expect(400);
+    await request(app).post("/api/scores").send({ assessmentId: cycle.id, questionsVersion: 1, scores: questions.map((q: Row) => ({ assessmentQuestionId: q.id, score: 4 })) }).expect(200);
+    const note = await request(app).post("/api/assessment-criterion-notes").send({ assessmentId: cycle.id, assessmentQuestionId: questions[0].id, questionsVersion: 1, note: "QA revised standard evidence" }).expect(201);
+    expect(note.body.questionName).toBe("Revised standard planning");
+    await request(app).patch(`/api/assessments/${cycle.id}`).send({ status: "completed", expectedQuestionsVersion: 1 }).expect(200);
+    const results = (await request(app).get(`/api/assessments/${cycle.id}/results`).expect(200)).body;
+    expect(results.aggregateScores.every((score: Row) => score.score === 4)).toBe(true);
+  });
+
+  it("rejects invalid or stale whole-catalogue changes atomically", async () => {
+    const set = await getSet();
+    const first = set.questions[0];
+    const rest = set.questions.slice(1);
+    for (const invalid of [{ id: 999 }, { id: 0.5 }, { categoryId: 999 }, { categoryId: 1.5 }, { orderIndex: 0.5 }, { orderIndex: -1 }, { name: " " }, { name: "x".repeat(501) }, { description: "x".repeat(5001) }, { companyId: 2 }, { isIncluded: "false" }]) {
+      expect((await saveSet(set, [{ ...first, ...invalid }, ...rest])).status).toBe(400);
+    }
+    for (const questions of [[], rest, [...set.questions, first], set.questions.map((q: Row) => ({ ...q, isIncluded: false })), [{ ...first, name: "Must roll back" }, { ...rest[0], categoryId: 999 }, rest[1]]]) {
+      expect((await saveSet(set, questions)).status).toBe(400);
+    }
+    expect((await saveSet({ ...set, version: "0".repeat(64) })).status).toBe(409);
+    await request(app).put(path).send({ expectedVersion: set.version, questions: set.questions, companyId: 2 }).expect(400);
+    expect(await getSet()).toEqual(set);
+    expect(mock.state.rows.auditLogs).toEqual([]);
+  });
+
+  it("audits safe global metadata, preserves duplicate wording, and detects stale edits", async () => {
+    const set = await getSet();
+    expect((await saveSet(set)).body.version).toBe(set.version);
+    expect(mock.state.rows.auditLogs).toEqual([]);
+    const saved = await saveSet(set, [{ ...set.questions[0], name: "Private catalogue text", description: "Private guidance" }, ...set.questions.slice(1), { ...set.questions[0], id: undefined }]);
+    expect(saved.status).toBe(200);
+    expect(saved.body.questions).toHaveLength(4);
+    expect((await saveSet(set)).status).toBe(409);
+    expect(mock.state.rows.auditLogs).toHaveLength(1);
+    expect(mock.state.rows.auditLogs[0]).toMatchObject({ actorUserId: 1, companyId: null, eventType: "catalogue.questions_changed", targetType: "question_catalogue", targetId: "standard", metadata: { addedCount: 1, includedCount: 4, changedFields: ["name", "description"] } });
+    expect(JSON.stringify(mock.state.rows.auditLogs)).not.toMatch(/Private catalogue text|Private guidance/);
+  });
+});
 
 describe("saved assessment questions", () => {
   beforeEach(() => mock.reset());

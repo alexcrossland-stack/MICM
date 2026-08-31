@@ -27,7 +27,7 @@ const navItems = [
   { label: "Info", icon: Info, href: "/info", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Dashboard", icon: LayoutDashboard, href: "/", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Assessments", icon: ClipboardList, href: "/assessments", roles: ["super_admin", "company_admin", "company_user"] },
-  { label: "Assessment Questions", icon: ClipboardList, href: "/assessment-questions", roles: ["super_admin"] },
+  { label: "Standard Questions", icon: ClipboardList, href: "/assessment-questions", roles: ["super_admin"] },
   { label: "Actions", icon: Zap, href: "/actions", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Analytics & Gap Analysis", icon: TrendingUp, href: "/analytics", roles: ["super_admin", "company_admin", "company_user"] },
   { label: "Reports", icon: BarChart3, href: "/reports", roles: ["super_admin", "company_admin"] },
